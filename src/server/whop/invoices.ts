@@ -1,0 +1,60 @@
+import '@tanstack/react-start/server-only'
+
+import { whopPublicConfig } from '../../config/whop'
+import { centsToMajorUnits } from '../../lib/deposit'
+import type { FinalInvoiceDraft } from '../../lib/invoice'
+import { asRecord, pickString, whopRequest } from './client'
+
+/**
+ * The dated pin is required: `2026-10-24` and later route this endpoint to the
+ * native invoice API, which only accepts variant items rather than an inline
+ * one-time plan. The legacy shape is what supports a project total plus an
+ * explicit negative deposit-credit line.
+ */
+const INVOICES_API_VERSION = '2026-09-22'
+
+export type CreatedInvoice = {
+  id: string | null
+  status: string | null
+  url: string | null
+}
+
+export async function createFinalInvoice(draft: FinalInvoiceDraft): Promise<CreatedInvoice> {
+  const payload = await whopRequest('/invoices', {
+    method: 'POST',
+    apiVersion: INVOICES_API_VERSION,
+    idempotencyKey: draft.idempotencyKey,
+    timeoutMs: 20_000,
+    body: {
+      account_id: whopPublicConfig.accountId,
+      product_id: whopPublicConfig.productId,
+      collection_method: 'send_invoice',
+      customer_name: draft.customerName,
+      email_address: draft.email,
+      due_date: draft.dueDate,
+      plan: {
+        currency: draft.currency,
+        plan_type: 'one_time',
+        initial_price: centsToMajorUnits(draft.balanceDueCents),
+      },
+      line_items: draft.lineItems.map((item) => ({
+        label: item.label,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+      })),
+    },
+  })
+
+  const root = asRecord(payload)
+  const nested = asRecord(root.invoice)
+  const record = pickString(nested, 'id') ? nested : root
+
+  return {
+    id: pickString(record, 'id'),
+    status: pickString(record, 'status'),
+    url:
+      pickString(record, 'invoice_url') ??
+      pickString(record, 'hosted_url') ??
+      pickString(record, 'url'),
+  }
+}
