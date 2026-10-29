@@ -139,7 +139,7 @@ a signed HttpOnly cookie — no access or refresh tokens.
 
 ```bash
 bun run typecheck   # tsc --noEmit
-bun test            # 124 tests / 9 files
+bun test            # 125 tests / 9 files
 ```
 
 Tests cover deposit math and status normalization, the verified-deposit invoice

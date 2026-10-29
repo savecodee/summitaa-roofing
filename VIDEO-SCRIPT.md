@@ -193,7 +193,7 @@ bun run build
 ```
 
 **Say:**
-> Typecheck is clean and the suite is 124 passing tests across 9 files with 426
+> Typecheck is clean and the suite is 125 passing tests across 9 files with 431
 > assertions: deposit math and status handling, the verified-deposit invoice
 > gate, invoice math, OAuth state and PKCE, webhook verification including the
 > three setup-intent events, request guards, save-card helpers, and tracking

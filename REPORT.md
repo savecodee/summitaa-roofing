@@ -50,7 +50,7 @@
 | 22 | `service_viewed` event | **VERIFIED** | Whop Events API: 19 events in the review window |
 | 23 | `deposit_started` on deposit start only | **VERIFIED** | Whop Events API: 1 event for 5 `/deposit` page views in the same sample |
 | 24 | Pixel installed on the live site | **VERIFIED** | `POST /events/validate_pixel`: `installed: true`, `reachable: true`, `last_seen_days: 0` |
-| 25 | Tests: typecheck, unit, leakage, endpoints | **VERIFIED** | `tsc --noEmit` clean; 124 tests / 9 files / 426 assertions pass; build clean; endpoint matrix in §6 |
+| 25 | Tests: typecheck, unit, leakage, endpoints | **VERIFIED** | `tsc --noEmit` clean; 125 tests / 9 files / 431 assertions pass; build clean; endpoint matrix in §6 |
 | 26 | Source repo / ZIP | **VERIFIED** | Commit containing this report + `summitaa-roofing-source.zip` rebuilt from it; archive excludes `node_modules`, `dist`, `.git`, `.dev.vars` |
 
 ---
@@ -292,7 +292,7 @@ page for the account.
 | `POST /api/whop/webhook` (unsigned) | `503 not_configured` (secret absent) |
 | `GET /api/auth/whop/session` | `{"signedIn":true,...}` |
 | `bun run typecheck` | clean |
-| `bun test` | 124 pass, 0 fail, 426 assertions, 9 files |
+| `bun test` | 125 pass, 0 fail, 431 assertions, 9 files |
 | `bun run build` | clean; client + SSR + `dist/whop-build.zip` |
 | Key scan | No API key or `.dev.vars` value in `src/`, `public/`, or `dist/whop-build.zip` |
 | Log scan | `console.*` calls log only status/code/method — no card data, tokens, or emails |

@@ -83,6 +83,20 @@ describe('final invoice validation', () => {
     expect(draft.dueDate).toBe('2026-11-11T12:00:00.000Z')
   })
 
+  test('computes the campaign example: $1,499 project minus $500 deposit = $999 due', () => {
+    const draft = expectDraft(
+      validateFinalInvoice(
+        { ...validInvoice, projectTotalCents: 149_900 },
+        { currency: 'usd', now: NOW, deposit: validDeposit },
+      ),
+    )
+
+    expect(draft.depositCreditCents).toBe(50_000)
+    expect(draft.balanceDueCents).toBe(99_900)
+    expect(draft.lineItems.map((item) => item.unit_price)).toEqual([1499, -500])
+    expect(lineItemsTotalCents(draft.lineItems)).toBe(99_900)
+  })
+
   test('defaults to no deposit credit only when no payment was verified', () => {
     const draft = expectDraft(validateFinalInvoice(validInvoice, { currency: 'usd', now: NOW }))
 
