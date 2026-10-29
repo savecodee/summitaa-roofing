@@ -155,7 +155,21 @@ POST /api/whop/final-invoice   (credit > total) → 400 credit_exceeds_total
 > takes the project total and an explicit deposit credit, then builds the
 > remaining balance and calls the Whop Invoices API with manual collection. It
 > never infers the deposit and never auto-charges a saved card, because
-> collection was not authorized. No live invoice was created in this review.
+> collection was not authorized.
+
+**Do:** show the native draft in the Whop dashboard Invoices tab, or run
+`whop invoices get pay_udLKGPtjzXHqm3`.
+
+**Point at:** status `draft`, total `$999.00`, and the metadata
+`project_total_cents=149900`, `deposit_credit_cents=50000`,
+`balance_due_cents=99900`.
+
+**Say:**
+> This test draft records a $1,499 project minus the $500 deposit: $999 due.
+> Whop reads it back as a draft — it was never sent, charged, or emailed. The
+> site's legacy route, which prints the total and the negative credit line, was
+> not run end-to-end because legacy invoices email on creation. I am not
+> claiming that last step.
 
 ---
 
@@ -182,17 +196,19 @@ bun test
 **Say:**
 > To summarize: the site is live on Whop, the three plans are real, checkout uses
 > Whop Payment Elements with the required branding element, estimate requests
-> create real Whop Leads through OAuth, and Whop's own Events system stores all
-> three custom pixel events with deduplicable ids. The one gap is a completed
-> card payment: Whop has no sandbox Elements for this app and I would not use a
-> real card, so no charge and no saved card are claimed. Everything else is
-> deployed and verified.
+> create real Whop Leads through OAuth, Whop's own Events system stores all three
+> custom pixel events with deduplicable ids, and a native $999 invoice draft was
+> read back from Whop without sending or charging it. The remaining gaps are a
+> completed card payment and the legacy two-line invoice, which emails on
+> creation. No charge, saved card, or sent invoice is claimed.
 
 ---
 
 ## Do not say / do not show
 
 - Do not say a payment succeeded, a card was saved, or money moved.
+- Do not say the legacy final-invoice route was tested end-to-end; only a
+  native draft was created and read back.
 - Do not say Apple Pay or Google Pay was tested; only the domain record is
   verified, not wallet rendering or payment.
 - Do not show `.dev.vars`, API keys, tokens, or the operator token.

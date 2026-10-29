@@ -3,6 +3,7 @@
 **Live site:** https://summitaa.whop.site
 **Whop app:** `app_wZYnrCcqbNft8J` · **Account:** `biz_wHs7ScZ5eHIZrH` · **Product:** `prod_UxTHDvkWPVf68`
 **Deployed build:** `apbu_PNoDCCkxFCt6I` (production, approved) — unchanged in this review
+**Invoice draft:** `pay_udLKGPtjzXHqm3` (native test draft, `draft`, `$999.00`, never sent or charged)
 
 > Whop serves this app at `summitaa.whop.site`. `summitaa.whop.app` is not
 > provisioned and returns 404.
@@ -12,8 +13,8 @@
 - **VERIFIED** — confirmed by direct evidence (Whop API/CLI/domain record, a
   test, or a live endpoint), not only a UI claim or an HTTP 200.
 - **IMPLEMENTED BUT UNVERIFIED** — code is deployed and its error paths are
-  tested, but the success path needs a card, a wallet, or an account permission
-  that is not available without explicit approval.
+  tested, but the success path still needs an approval, a card, a wallet, or a
+  permission that was not available in this review.
 - **BLOCKED** — an external constraint prevents completion; the specific
   constraint is named.
 - **NOT APPLICABLE** — the requirement's premise does not hold; the reason and
@@ -41,7 +42,7 @@
 | 14 | `setupFutureUsage="off_session"` on deposit | **VERIFIED** | Present on `<Payments>`; official save-during-checkout path |
 | 15 | Card-on-file setup flow | **IMPLEMENTED BUT UNVERIFIED** | `/deposit/save-card` + `POST /api/whop/save-card`; invalid token → `422 card_rejected`; no real card saved |
 | 16 | Saved method reference retrieval | **BLOCKED** | Official path is `payment.succeeded` / Setup Intent; production webhook secret is not set (`503 not_configured`) |
-| 17 | Whop Invoices API for remaining balance | **BLOCKED (live create)** | Route, math, and guards verified; no invoice created: available key lacks `payment:charge`, legacy path emails on success, CLI item parser fails; see §4 |
+| 17 | Whop Invoices API for remaining balance | **IMPLEMENTED BUT UNVERIFIED** | Native draft `pay_udLKGPtjzXHqm3` created and read back (`draft`, `$999.00`); site's legacy `send_invoice` route not invoked because it emails on success; math unit-tested; see §4 |
 | 18 | Manual collection, no auto-charge | **VERIFIED** | Payload uses `collection_method: send_invoice`; no charge code path exists |
 | 19 | Estimate form creates a real Whop Lead | **VERIFIED** | Lead `lead_kKXGVRmMm1mPo`, request `est_80b45c52eebe469cb807666ef8a4598a`, `tracked: true` |
 | 20 | No fixed/fake user id | **VERIFIED** | Lead uses the OAuth-authenticated user; `/api/leads` rejects anonymous requests |
@@ -161,7 +162,7 @@ consent is attested on the token.
 `POST /api/whop/final-invoice` (operator bearer, constant-time compare,
 same-origin) takes `projectTotalCents` and an explicit `depositCreditCents`,
 computes `balanceDueCents`, builds a project line and a negative deposit-credit
-line, and calls the Invoices API with `collection_method: "send_invoice"`.
+line, and calls the legacy Invoices API with `collection_method: "send_invoice"`.
 
 | Check | Result |
 | - | - |
@@ -172,32 +173,55 @@ line, and calls the Invoices API with `collection_method: "send_invoice"`.
 | Math and limits | Covered by `tests/invoice.test.js`; balance = total − explicit credit, minimum 50¢, currency must match, due date 1–90 days |
 | Auto-charge | None. No saved method is attached and no charge call exists |
 
-### 4.2 Why no live invoice was created
+### 4.2 Native draft created; route still unexecuted
 
-1. **The available account API key lacks `payment:charge`.** `POST /invoices`
-   with `Api-Version-Date: 2026-10-24` returns
-   `403 Company API key is not authorized for the payment:charge scope`.
-   The site's own `/api/whop/final-invoice` route uses the legacy invoices path
-   described in point 2, so it was not used for this test.
-2. **Legacy API emails by design.** The docs' comparison table says legacy
-   invoices are emailed by Whop, while native invoices are only emailed on an
-   explicit Send. Calling the legacy route's success path would email a real
-   address, so it was deliberately not invoked.
-3. **CLI cannot build the item list.** `whop invoices create` (CLI 0.30.0)
+1. **Native draft created and read back.** The OAuth credential has
+   `payment:charge` (the separate account API key does not).
+   `POST /invoices` with `Api-Version-Date: 2026-10-24` returned `201` and
+   created `pay_udLKGPtjzXHqm3` — number `#00000001`, status `draft`, total and
+   amount due `$999.00`. `GET /invoices/{id}` and `invoices list` both return
+   the same draft. A draft charges nothing, emails nobody, and sends no webhook.
+2. **The native draft cannot reproduce the credit line.** Native invoice items
+   are variants only, so the draft uses the real $999 repair variant for the net
+   balance ($1,499 project − $500 deposit = $999). The metadata records the
+   arithmetic; the negative deposit-credit line itself is a legacy feature.
+3. **The site route uses the legacy API.** `Api-Version-Date: 2026-09-22`
+   supports `line_items` plus an inline plan, which is what lets the route show
+   the project total and the negative deposit credit. Legacy invoices are
+   emailed by Whop (docs comparison table), so calling the route's success path
+   would email a real address; it was deliberately not invoked.
+4. **CLI cannot build the item list.** `whop invoices create` (CLI 0.30.0)
    rejects every `items` object with `invalid_union` at `items.0`, reproduced
    with two valid plans (`plan_NlxIPUOrmzS6E`, `plan_53arhuP2hflnI`) and the
-   documented `{"variant_id": "plan_..."}` shape. This is a CLI validation bug,
-   not an API rejection.
+   documented `{"variant_id": "plan_..."}` shape. The native draft was therefore
+   created through the direct API, not the CLI.
 
-### 4.3 Safe way to finish it (account owner)
+### 4.3 Draft evidence (not sent, not charged)
 
-- Create a draft in the Whop dashboard **Invoices** tab (drafts charge nothing
-  and email nobody), or
-- Grant a credential with `payment:charge` and call `POST /invoices` with
-  `Api-Version-Date: 2026-10-24`, `items: [{ "plan_id": "...", "quantity": 1 }]`,
-  and leave the result in `draft` status so Whop emails nobody.
+| Check | Result |
+| - | - |
+| `POST /invoices` (native, OAuth) | `201 Created` |
+| Invoice | `pay_udLKGPtjzXHqm3`, `#00000001`, status `draft` |
+| Total / amount due | `$999.00` USD |
+| Read back | `GET /invoices/{id}` and `invoices list` return the same draft |
+| Metadata | `project_total_cents=149900`, `deposit_credit_cents=50000`, `balance_due_cents=99900` |
+| Send / charge / email | None |
+| Customer | The account owner's own email; a draft emails nobody |
 
-No invoice was created, sent, or charged in this review.
+The draft is left in place for review. Void it in the dashboard if it is not
+wanted.
+
+### 4.4 Safe way to finish the legacy route (account owner)
+
+- **Review the native draft** and void it if it is not needed.
+- To exercise the site's legacy `/api/whop/final-invoice` success path, explicit
+  approval is required because Whop emails the invoice. Use the owner's address
+  and a test project reference, then void or delete the result immediately.
+- Alternatively, adapt the route to native invoices and accept that the negative
+  credit line becomes a net-balance variant. That is a code change and was not
+  made.
+
+No invoice was sent or charged in this review.
 
 ---
 
@@ -241,6 +265,8 @@ page for the account.
 | `POST /api/whop/save-card` (invalid token) | `422 card_rejected`, nothing saved |
 | `GET /api/whop/save-card` (fake id) | `422 setup_unavailable` |
 | `POST /api/whop/final-invoice` | `403` / `401` / `400` as designed |
+| `POST /invoices` (native draft, OAuth) | `201`; `pay_udLKGPtjzXHqm3`, `draft`, `$999.00` |
+| `GET /invoices/{id}` / `invoices list` | Same draft; no send, charge, or email |
 | `POST /api/whop/webhook` (unsigned) | `503 not_configured` (secret absent) |
 | `GET /api/auth/whop/session` | `{"signedIn":true,...}` |
 | `bun run typecheck` | clean |
@@ -261,8 +287,9 @@ page for the account.
    `developer:manage_webhook`, then set `WHOP_WEBHOOK_SECRET` as an app secret.
    This enables verified `payment.succeeded`, `setup_intent.succeeded`, and the
    `payment_method_id` reference.
-3. **Create the draft invoice** in the dashboard Invoices tab, or grant
-   `payment:charge` and use the native API shape in §4.3.
+3. **Review the native draft** `pay_udLKGPtjzXHqm3` (`$999.00`, `draft`) and
+   void it if it is not wanted. To test the site's legacy route end-to-end,
+   approve one emailed test invoice first; that route emails by design.
 4. **Decide on a real checkout test.** Only with explicit approval; otherwise
    wait for Whop sandbox Elements.
 5. Optional: set `WHOP_ENABLE_FINAL_INVOICE=false` when the invoice route is not
@@ -285,4 +312,6 @@ with deduplicable event ids verified through the Whop Events API, implements
 card-on-file with a Whop Setup Intent (`setupFutureUsage="off_session"` on the
 deposit plus a separate setup-mode page), and implements the remaining-balance
 bill through the Whop Invoices API with an explicit deposit credit, using manual
-`send_invoice` collection rather than unauthorized automatic charging.
+`send_invoice` collection rather than unauthorized automatic charging. A native
+`$999.00` draft (`pay_udLKGPtjzXHqm3`) was created and read back; it was never
+sent or charged.
