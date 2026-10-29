@@ -4,7 +4,8 @@
 **Whop app:** `app_wZYnrCcqbNft8J` · **Account:** `biz_wHs7ScZ5eHIZrH` · **Product:** `prod_UxTHDvkWPVf68`
 **Deployed build:** `apbu_GZCyGWJH163r5` (production, approved) — unchanged in this pass
 **Invoice draft:** `pay_udLKGPtjzXHqm3` (native test draft, `draft`, `$999.00`, never sent or charged — **not** proof of the site's deposit flow; the live gate rejects it as `deposit_not_paid`)
-**Revision 2026-10-29:** invoice link mapping fixed and covered by tests; no deploy, no payment, no secret change. Local test suite: 166 passing.
+**Revision 2026-10-29:** commit `ee40064` — invoice link mapping fixed and covered by tests; no deploy, no payment, no secret change. Local test suite: 166 passing.
+**Commit:** `ee40064` (`Fix invoice pay_online_url mapping and harden deposit tests`) — local only; not pushed or deployed.
 
 > Whop serves this app at `summitaa.whop.site`. `summitaa.whop.app` is not
 > provisioned and returns 404.
@@ -16,8 +17,6 @@
 - **IMPLEMENTED BUT UNVERIFIED** — code is deployed and its error paths are
   tested, but the success path still needs an approval, a card, a wallet, or a
   permission that was not available in this review.
-- **VERIFIED WITH CAVEAT** — the stated fact is directly confirmed, but a newer
-  local change is not yet committed, archived, or deployed.
 - **BLOCKED** — an external constraint prevents completion; the specific
   constraint is named.
 - **NOT APPLICABLE** — the requirement's premise does not hold; the reason and
@@ -54,7 +53,7 @@
 | 23 | `deposit_started` on deposit start only | **VERIFIED** | Whop Events API: 1 event for 5 `/deposit` page views in the same sample |
 | 24 | Pixel installed on the live site | **VERIFIED** | `POST /events/validate_pixel`: `installed: true`, `reachable: true`, `last_seen_days: 0` |
 | 25 | Tests: typecheck, unit, leakage, endpoints | **VERIFIED** | `tsc --noEmit` clean; 166 tests / 13 files / 560 assertions pass; build clean; endpoint matrix in §6 |
-| 26 | Source repo / ZIP | **VERIFIED WITH CAVEAT** | Existing `summitaa-roofing-source.zip` matches commit `45108d1` and excludes `node_modules`, `dist`, `.git`, `.dev.vars`; the 2026-10-29 changes (2 modified, 4 new test files) are not committed or included yet |
+| 26 | Source repo / ZIP | **VERIFIED** | Commit `ee40064` plus `summitaa-roofing-source.zip` rebuilt from it; archive excludes `node_modules`, `dist`, `.git`, `.dev.vars`, and secrets |
 
 ---
 
@@ -436,14 +435,14 @@ Pay tiles remain available through `PaymentElement`.
   tests and documents.
 - **Deployed build:** `apbu_GZCyGWJH163r5` (`status: approved`,
   `is_production: true`, `https://summitaa.whop.site`).
-- **2026-10-29 pass (not deployed):** fixed the invoice response mapping to
-  read the official `pay_online_url`; added four no-money test files and
-  expanded the webhook route tests. Final local results: `bun test` 166 pass,
-  0 fail, 560 assertions, 13 files; `bun run typecheck` clean; `bun run build`
-  clean, `dist/whop-build.zip` 55 entries with no `.dev.vars`/`.env`/secret
-  match. The changes are uncommitted and production still runs
-  `apbu_GZCyGWJH163r5`. No deploy, payment, refund, invoice send, secret change,
-  or permission change was performed.
+- **2026-10-29 local commit (`ee40064`, not deployed):** fixed the invoice
+  response mapping to read the official `pay_online_url`; added four no-money
+  test files and expanded the webhook route tests. Final local results:
+  `bun test` 166 pass, 0 fail, 560 assertions, 13 files; `bun run typecheck`
+  clean; `bun run build` clean, `dist/whop-build.zip` 55 entries with no
+  `.dev.vars`/`.env`/secret match. The source archive is rebuilt from this
+  commit. Production still runs `apbu_GZCyGWJH163r5`. No push, deploy, payment,
+  refund, invoice send, secret change, or permission change was performed.
 - **Files changed in this pass:** `src/server/whop/invoices.ts`,
   `tests/invoice-creation.test.js`, `tests/final-invoice-route.test.js`,
   `tests/payment-verification.test.js`, `tests/webhook-route.test.js`, and
