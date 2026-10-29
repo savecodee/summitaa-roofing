@@ -184,9 +184,9 @@ Only then is the Whop subtotal used as the deposit credit. The balance is
 
 | Check | Result |
 | - | - |
-| Foreign origin | `403 forbidden` (observed locally) |
-| No bearer token | `401 unauthorized` (observed locally) |
-| Missing `depositPaymentId` | `400 invalid_input` (observed locally) |
+| Foreign origin | `403 forbidden` (observed locally and live) |
+| No bearer token | `401 unauthorized` (observed locally and live) |
+| Missing `depositPaymentId` | `400 invalid_input` (observed locally and live) |
 | Client sends `depositCreditCents` | `400 client_supplied_credit` (observed live) |
 | Fake `pay_` reference | `422 deposit_not_found` after a real Whop lookup (observed live) |
 | Native draft `pay_udLKGPtjzXHqm3` | `422 deposit_not_verified`, reason `deposit_not_paid` (observed live) — the draft cannot be used as a deposit |
