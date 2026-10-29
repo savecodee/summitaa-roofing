@@ -2,7 +2,8 @@
 
 **Goal:** show the live Whop-hosted site, the real plans, Payment Elements, the
 real Lead, and the three custom pixel events — while staying honest about the
-one thing that is not completed (a real card charge).
+one thing that is not completed (a real card charge, and therefore a verified
+paid deposit for the final-invoice flow).
 
 **Prep before recording**
 
@@ -131,31 +132,39 @@ body, and the dashboard count: **5** `pixel.page` views of `/deposit` but **1**
 
 ---
 
-## 3:15 – 3:55 · Card on file + final invoice
+## 3:15 – 4:05 · Card on file + final invoice
 
 **Do:** open `/deposit/save-card`. Show "Save card — no charge" and the setup
 form.
 
 **Say:**
 > This page mounts the elements in setup mode and creates a Whop Setup Intent.
-> It saves a payment method and charges nothing. I verified the live route
-> rejects an invalid token with a 422, so the route is wired and rejects bad
-> input, but I could not save a real card without entering one.
+> It saves a payment method and charges nothing. The server now checks that the
+> intent echoes the business account and reports only booleans — whether the
+> account is linked, whether a buyer is linked, and whether a payment method is
+> on file. It never returns the member id or the payment-method reference to the
+> browser. I verified the live route rejects an invalid token with a 422, but I
+> could not save a real card without entering one.
 
 **Do:** show a terminal with the operator route checks:
 
 ```
-POST /api/whop/final-invoice   (foreign origin) → 403
-POST /api/whop/final-invoice   (no bearer)      → 401
-POST /api/whop/final-invoice   (credit > total) → 400 credit_exceeds_total
+POST /api/whop/final-invoice   (foreign origin)        → 403
+POST /api/whop/final-invoice   (no bearer)             → 401
+POST /api/whop/final-invoice   (no deposit reference)  → 400 invalid_input
+POST /api/whop/final-invoice   (client sends credit)   → 400 client_supplied_credit
+POST /api/whop/final-invoice   (fake pay_ reference)   → 422 deposit_not_found
 ```
 
 **Say:**
 > The final-invoice route is operator-only and constant-time token checked. It
-> takes the project total and an explicit deposit credit, then builds the
-> remaining balance and calls the Whop Invoices API with manual collection. It
-> never infers the deposit and never auto-charges a saved card, because
-> collection was not authorized.
+> no longer accepts a deposit credit from the operator. It requires a real
+> `pay_` deposit reference, fetches that payment from Whop, and checks the paid
+> status, account, deposit plan, project reference, amount, and currency. Only
+> then does it use the Whop amount as the credit. It creates the invoice as a
+> draft, so nothing is emailed or charged; an operator reviews and sends it
+> manually. I can show every rejection path, but I cannot show a successful
+> invoice because there is no paid $500 deposit to verify.
 
 **Do:** show the native draft in the Whop dashboard Invoices tab, or run
 `whop invoices get pay_udLKGPtjzXHqm3`.
@@ -165,50 +174,55 @@ POST /api/whop/final-invoice   (credit > total) → 400 credit_exceeds_total
 `balance_due_cents=99900`.
 
 **Say:**
-> This test draft records a $1,499 project minus the $500 deposit: $999 due.
-> Whop reads it back as a draft — it was never sent, charged, or emailed. The
-> site's legacy route, which prints the total and the negative credit line, was
-> not run end-to-end because legacy invoices email on creation. I am not
-> claiming that last step.
+> This is a separate API test from an earlier pass: a $1,499 project minus a
+> $500 deposit, read back by Whop as a draft. It is not proof of the site's
+> deposit flow. It is not a paid deposit, it uses the $999 repair variant rather
+> than the $500 deposit plan, and the new gate would reject it. It was never
+> sent, charged, or emailed.
 
 ---
 
-## 3:55 – 4:35 · Tests
+## 4:05 – 4:45 · Tests
 
 **Do:** run in the terminal:
 
 ```bash
 bun run typecheck
 bun test
+bun run build
 ```
 
 **Say:**
-> Typecheck is clean and the suite is 113 passing tests across 9 files: deposit
-> math and status handling, invoice validation, OAuth state and PKCE, webhook
-> verification, request guards, save-card helpers, and tracking payloads. The
-> key scan confirms no API key or `.dev.vars` value is in the source or the
-> deploy archive.
+> Typecheck is clean and the suite is 124 passing tests across 9 files with 426
+> assertions: deposit math and status handling, the verified-deposit invoice
+> gate, invoice math, OAuth state and PKCE, webhook verification including the
+> three setup-intent events, request guards, save-card helpers, and tracking
+> payloads. The key scan confirms no API key or `.dev.vars` value is in the
+> source or the deploy archive.
 
 ---
 
-## 4:35 – 5:00 · Close
+## 4:45 – 5:00 · Close
 
 **Say:**
 > To summarize: the site is live on Whop, the three plans are real, checkout uses
 > Whop Payment Elements with the required branding element, estimate requests
 > create real Whop Leads through OAuth, Whop's own Events system stores all three
-> custom pixel events with deduplicable ids, and a native $999 invoice draft was
-> read back from Whop without sending or charging it. The remaining gaps are a
-> completed card payment and the legacy two-line invoice, which emails on
-> creation. No charge, saved card, or sent invoice is claimed.
+> custom pixel events with deduplicable ids, and the final-invoice route now
+> derives its deposit credit from a real Whop payment and creates only a draft.
+> The remaining gaps are a completed $500 card payment and a saved card, which
+> need either Whop sandbox Elements or an approved real-card test. No charge,
+> saved card, or sent invoice is claimed.
 
 ---
 
 ## Do not say / do not show
 
 - Do not say a payment succeeded, a card was saved, or money moved.
-- Do not say the legacy final-invoice route was tested end-to-end; only a
-  native draft was created and read back.
+- Do not say the final-invoice route was tested with a paid deposit; only its
+  rejection paths and math were tested.
+- Do not use the native draft `pay_udLKGPtjzXHqm3` as proof of the deposit →
+  invoice flow; say plainly that it is a separate API test.
 - Do not say Apple Pay or Google Pay was tested; only the domain record is
   verified, not wallet rendering or payment.
 - Do not show `.dev.vars`, API keys, tokens, or the operator token.

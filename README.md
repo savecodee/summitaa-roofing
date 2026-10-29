@@ -81,9 +81,9 @@ API:
 | `POST /api/whop/deposit` | Charges the configured deposit plan via confirmation token |
 | `GET /api/whop/payment-status` | Authoritative payment status for the return page |
 | `POST /api/whop/save-card` | Creates a Whop Setup Intent (no charge) |
-| `GET /api/whop/save-card` | Reads authoritative setup status |
-| `POST /api/whop/final-invoice` | Operator-only, bearer token, disabled unless enabled |
-| `POST /api/whop/webhook` | Signed Whop payment webhooks |
+| `GET /api/whop/save-card` | Reads authoritative setup status and linkage booleans |
+| `POST /api/whop/final-invoice` | Operator-only, verified deposit, draft invoice, bearer token |
+| `POST /api/whop/webhook` | Signed Whop payment and setup-intent webhooks |
 
 ## Payment design
 
@@ -96,11 +96,14 @@ API:
 2. **Card on file.** `/deposit/save-card` mounts the payment elements in
    `mode="setup"` and creates a Setup Intent (`Api-Version-Date: 2026-10-24`).
    Nothing is charged. The saved method belongs to the buyer in Whop.
-3. **Final invoice.** `POST /api/whop/final-invoice` is operator-only. It takes
-   the project total and an explicit deposit credit, computes the balance, and
-   creates a Whop invoice for manual payment (`collection_method:
-   send_invoice`). The deposit credit is never inferred, and the saved card is
-   never charged automatically; auto-charging requires explicit authorization.
+3. **Final invoice.** `POST /api/whop/final-invoice` is operator-only. It
+   requires the `pay_` reference of a real deposit; the server fetches that
+   payment from Whop and verifies the paid status, account, deposit plan,
+   project reference, amount, and currency before using it as the credit. The
+   balance is `project total - verified deposit`, and the invoice is created as
+   a draft (`save_as_draft: true`) for manual review and collection. Nothing is
+   emailed or charged by the site, and the saved card is never charged
+   automatically; auto-charging requires explicit authorization.
 
 No card number, CVV, or expiry is accepted, logged, or stored by this app.
 
@@ -136,12 +139,13 @@ a signed HttpOnly cookie — no access or refresh tokens.
 
 ```bash
 bun run typecheck   # tsc --noEmit
-bun test            # 113 tests / 9 files
+bun test            # 124 tests / 9 files
 ```
 
-Tests cover deposit math and status normalization, estimate/invoice validation,
-OAuth state/PKCE helpers, webhook verification, request helpers, save-card
-identifiers and return URLs, and tracking payload shape.
+Tests cover deposit math and status normalization, the verified-deposit invoice
+gate, estimate/invoice validation, OAuth state/PKCE helpers, webhook verification
+(including setup-intent events), request helpers, save-card identifiers and
+return URLs, and tracking payload shape.
 
 ## Known limitations
 
@@ -153,6 +157,6 @@ identifiers and return URLs, and tracking payload shape.
   route is live and returns a correct `422` for invalid tokens.
 - Automatic off-session charging of a saved card is intentionally not wired: it
   requires explicit approval and a `payment:charge`-capable credential. The
-  final balance is sent as an invoice for manual payment.
+  final balance is created as a draft invoice, reviewed, and sent manually.
 - `GET /events` on the Whop API did not list the custom pixel events; they were
   verified from the pixel request bodies and the build/app IDs they carry.

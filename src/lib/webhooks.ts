@@ -173,3 +173,32 @@ export type PaymentWebhookType = (typeof PAYMENT_WEBHOOK_TYPES)[number]
 export function isPaymentWebhookType(type: string): type is PaymentWebhookType {
   return (PAYMENT_WEBHOOK_TYPES as readonly string[]).includes(type)
 }
+
+/**
+ * Card-on-file events. A setup intent saves a method without charging it, so
+ * these are the authoritative signal that a card is on file for the final
+ * balance. They are forwarded like payment events; none of them is treated as
+ * a charge.
+ */
+export const SETUP_INTENT_WEBHOOK_TYPES = [
+  'setup_intent.succeeded',
+  'setup_intent.canceled',
+  'setup_intent.requires_action',
+] as const
+
+export type SetupIntentWebhookType = (typeof SETUP_INTENT_WEBHOOK_TYPES)[number]
+
+export function isSetupIntentWebhookType(type: string): type is SetupIntentWebhookType {
+  return (SETUP_INTENT_WEBHOOK_TYPES as readonly string[]).includes(type)
+}
+
+export const HANDLED_WEBHOOK_TYPES = [
+  ...PAYMENT_WEBHOOK_TYPES,
+  ...SETUP_INTENT_WEBHOOK_TYPES,
+] as const
+
+export type HandledWebhookType = (typeof HANDLED_WEBHOOK_TYPES)[number]
+
+export function isHandledWebhookType(type: string): type is HandledWebhookType {
+  return isPaymentWebhookType(type) || isSetupIntentWebhookType(type)
+}

@@ -40,6 +40,15 @@ export function normalizePaymentStatus(value: unknown): NormalizedPaymentStatus 
 
 export const DEPOSIT_ATTEMPT_PATTERN = /^att_[A-Za-z0-9_-]{8,80}$/
 export const CONFIRMATION_TOKEN_PATTERN = /^ctok_[A-Za-z0-9_-]{8,400}$/
+export const PAYMENT_ID_PATTERN = /^pay_[A-Za-z0-9]{6,120}$/
+
+/**
+ * A Whop payment reference. Shared so the browser-facing return page and the
+ * server-side invoice gate accept exactly the same identifier shape.
+ */
+export function isPaymentId(value: unknown): value is string {
+  return typeof value === 'string' && PAYMENT_ID_PATTERN.test(value)
+}
 
 function randomToken(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {

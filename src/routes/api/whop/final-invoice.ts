@@ -1,6 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router'
 
-import { validateFinalInvoice } from '../../../lib/invoice'
+import { whopPublicConfig } from '../../../config/whop'
+import { isPaymentId } from '../../../lib/deposit'
+import { validateFinalInvoice, verifyDepositForInvoice } from '../../../lib/invoice'
+import { normalizeProjectRef } from '../../../lib/project'
 import {
   isSameOriginRequest,
   jsonResponse,
@@ -18,14 +21,24 @@ import {
   getWhopServerConfig,
 } from '../../../server/whop/config'
 import { createFinalInvoice } from '../../../server/whop/invoices'
+import { getDepositPayment } from '../../../server/whop/payments'
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
 
 /**
  * Operator-only final invoice creation.
  *
  * Auth is a bearer token that is compared in constant time. The route stays
- * disabled until `WHOP_ENABLE_FINAL_INVOICE=true`. The deposit credit is never
- * inferred: the operator supplies it explicitly after reconciling the deposit
- * payment in Whop.
+ * disabled until `WHOP_ENABLE_FINAL_INVOICE=true`.
+ *
+ * The deposit credit is not trusted from the request. The operator sends a
+ * `pay_` reference; this route fetches that payment from Whop and requires a
+ * paid status, the configured account and deposit plan, the same project
+ * reference, and the configured amount and currency. Only then is the Whop
+ * amount used as the credit. The invoice is created as a draft, so nothing is
+ * emailed or charged; an operator issues it manually in Whop.
  */
 export const Route = createFileRoute('/api/whop/final-invoice')({
   server: {
@@ -76,8 +89,158 @@ export const Route = createFileRoute('/api/whop/final-invoice')({
           )
         }
 
+        if (!isRecord(body.value)) {
+          return jsonResponse(
+            { ok: false, code: 'invalid_input', message: 'Invalid invoice request.' },
+            { status: 400 },
+          )
+        }
+
+        if ('depositCreditCents' in body.value) {
+          return jsonResponse(
+            {
+              ok: false,
+              code: 'client_supplied_credit',
+              message: 'The deposit credit is derived from a verified Whop payment.',
+              fields: {
+                depositCreditCents:
+                  'Remove this field. Send depositPaymentId so the server can verify the payment.',
+              },
+            },
+            { status: 400 },
+          )
+        }
+
+        const depositPaymentId = body.value.depositPaymentId
+        if (!isPaymentId(depositPaymentId)) {
+          return jsonResponse(
+            {
+              ok: false,
+              code: 'invalid_input',
+              message: 'Please check the invoice details.',
+              fields: { depositPaymentId: 'Send the pay_ reference of the verified deposit.' },
+            },
+            { status: 400 },
+          )
+        }
+
+        const projectRef = normalizeProjectRef(body.value.projectRef)
+        if (!projectRef) {
+          return jsonResponse(
+            {
+              ok: false,
+              code: 'invalid_input',
+              message: 'Please check the invoice details.',
+              fields: { projectRef: 'Use a valid project reference.' },
+            },
+            { status: 400 },
+          )
+        }
+
+        const expectedAmountCents = config.depositAmountCents
+        const expectedPlanId = config.depositPlanId
+        if (!expectedAmountCents || !expectedPlanId) {
+          // `finalInvoiceConfigurationIssues` already covers this; keep the
+          // guard so the verifier can never receive a null expectation.
+          return jsonResponse(
+            {
+              ok: false,
+              code: 'not_configured',
+              message: 'The deposit configuration is incomplete.',
+            },
+            { status: 503 },
+          )
+        }
+
+        let verifiedDeposit: { paymentId: string; creditCents: number }
+        try {
+          const payment = await getDepositPayment(depositPaymentId)
+          const verification = verifyDepositForInvoice({
+            payment,
+            expected: {
+              accountId: whopPublicConfig.accountId,
+              planId: expectedPlanId,
+              projectRef,
+              amountCents: expectedAmountCents,
+              currency: config.depositCurrency,
+            },
+          })
+
+          if (!verification.ok) {
+            return jsonResponse(
+              {
+                ok: false,
+                code: 'deposit_not_verified',
+                reason: verification.code,
+                message: verification.message,
+              },
+              { status: 422 },
+            )
+          }
+
+          verifiedDeposit = {
+            paymentId: depositPaymentId,
+            creditCents: verification.depositCreditCents,
+          }
+        } catch (error) {
+          if (error instanceof WhopNotConfiguredError) {
+            return jsonResponse(
+              { ok: false, code: 'not_configured', message: 'Whop is not configured.' },
+              { status: 503 },
+            )
+          }
+
+          if (error instanceof WhopApiError) {
+            if (error.status === 404) {
+              return jsonResponse(
+                {
+                  ok: false,
+                  code: 'deposit_not_found',
+                  message: 'Whop did not find that deposit payment.',
+                },
+                { status: 422 },
+              )
+            }
+
+            console.error('[final-invoice] deposit verification failed', {
+              status: error.status,
+              code: error.code,
+            })
+            return jsonResponse(
+              {
+                ok: false,
+                code: 'deposit_unavailable',
+                message: 'The deposit could not be verified right now. No invoice was created.',
+              },
+              { status: 502 },
+            )
+          }
+
+          if (error instanceof WhopTransportError) {
+            return jsonResponse(
+              {
+                ok: false,
+                code: 'deposit_unavailable',
+                message: 'The deposit could not be verified right now. No invoice was created.',
+              },
+              { status: 504 },
+            )
+          }
+
+          console.error('[final-invoice] unexpected deposit lookup failure')
+          return jsonResponse(
+            {
+              ok: false,
+              code: 'deposit_unavailable',
+              message: 'The deposit could not be verified right now. No invoice was created.',
+            },
+            { status: 500 },
+          )
+        }
+
         const invoice = validateFinalInvoice(body.value, {
           currency: config.depositCurrency,
+          deposit: verifiedDeposit,
         })
 
         if (!invoice.ok) {
@@ -99,10 +262,12 @@ export const Route = createFileRoute('/api/whop/final-invoice')({
             {
               ok: true,
               invoice: created,
+              depositPaymentId: verifiedDeposit.paymentId,
+              depositCreditCents: invoice.draft.depositCreditCents,
               balanceDueCents: invoice.draft.balanceDueCents,
               currency: invoice.draft.currency,
               idempotencyKey: invoice.draft.idempotencyKey,
-              note: 'Whop stores idempotency keys for 24 hours. Verify in Whop before retrying after that window.',
+              note: 'Created as a draft. Nothing was emailed or charged; review and send it manually in Whop. Whop stores idempotency keys for 24 hours.',
             },
             { status: 201 },
           )

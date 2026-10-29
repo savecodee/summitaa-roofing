@@ -2,8 +2,8 @@
 
 **Live site:** https://summitaa.whop.site
 **Whop app:** `app_wZYnrCcqbNft8J` · **Account:** `biz_wHs7ScZ5eHIZrH` · **Product:** `prod_UxTHDvkWPVf68`
-**Deployed build:** `apbu_PNoDCCkxFCt6I` (production, approved) — unchanged in this review
-**Invoice draft:** `pay_udLKGPtjzXHqm3` (native test draft, `draft`, `$999.00`, never sent or charged)
+**Deployed build:** `apbu_GZCyGWJH163r5` (production, approved) — promoted in this pass
+**Invoice draft:** `pay_udLKGPtjzXHqm3` (native test draft, `draft`, `$999.00`, never sent or charged — **not** proof of the site's deposit flow; the live gate rejects it as `deposit_not_paid`)
 
 > Whop serves this app at `summitaa.whop.site`. `summitaa.whop.app` is not
 > provisioned and returns 404.
@@ -26,7 +26,7 @@
 
 | # | Requirement | Status | Evidence |
 | - | - | - | - |
-| 1 | Live site hosted by Whop | **VERIFIED** | HTTP 200 on `/`, `/deposit`, `/deposit/save-card`; build `apbu_PNoDCCkxFCt6I`, `is_production: true` |
+| 1 | Live site hosted by Whop | **VERIFIED** | HTTP 200 on `/`, `/deposit`, `/deposit/save-card`; production build; see §9 |
 | 2 | English, responsive, US roofing focus | **VERIFIED** | No horizontal overflow at 390 / 768 / 1280 px on `/`, `/deposit`, `/deposit/save-card` |
 | 3 | Sections: Repair, Replacement, Inspection, Service Areas, Financing, Reviews/Trust, Contact, Estimate | **VERIFIED** | All rendered on `/`; demo content labeled in `src/config/site.ts` |
 | 4 | No invented reviews, certifications, testimonials | **VERIFIED** | Placeholder copy (`isPlaceholder`, `placeholderNote`) and sample service areas only |
@@ -36,22 +36,22 @@
 | 8 | Real plan: Standard Roof Repair $999 | **VERIFIED** | `plan_EFVJjO467EmuD`, one-time, USD, visible |
 | 9 | Whop Payment Elements only | **VERIFIED** | `<Payments>` + `PaymentElement` + `EmailElement` + `BrandingElement`; no Stripe/PayPal/custom card inputs in `src/` |
 | 10 | `BrandingElement` present | **VERIFIED** | Branding iframe loads from `cdn.whop.com/elements/.../branding/` on both payment pages |
-| 11 | `ExpressCheckoutElement` for wallets | **NOT APPLICABLE** | Exclusive to `<Checkout>` and has no pre-payment callback; see §3.3 |
+| 11 | `ExpressCheckoutElement` for wallets | **NOT APPLICABLE** | Exclusive to `<Checkout>`, has no pre-payment callback, and cannot share the existing `<Payments>` handle; see §3.3 |
 | 12 | Real sandbox/test Payment Elements checkout | **BLOCKED** | Whop: "The sandbox environment isn't available for Whop Elements yet"; sandbox also says not to use apps; see §2 |
-| 13 | No real card / no money moved | **VERIFIED** | No successful payment; invalid tokens return `422` "No charge was made" |
+| 13 | No real card / no money moved | **VERIFIED** | No successful payment; invalid tokens return `422` and the response states no charge |
 | 14 | `setupFutureUsage="off_session"` on deposit | **VERIFIED** | Present on `<Payments>`; official save-during-checkout path |
-| 15 | Card-on-file setup flow | **IMPLEMENTED BUT UNVERIFIED** | `/deposit/save-card` + `POST /api/whop/save-card`; invalid token → `422 card_rejected`; no real card saved |
-| 16 | Saved method reference retrieval | **BLOCKED** | Official path is `payment.succeeded` / Setup Intent; production webhook secret is not set (`503 not_configured`) |
-| 17 | Whop Invoices API for remaining balance | **IMPLEMENTED BUT UNVERIFIED** | Native draft `pay_udLKGPtjzXHqm3` created and read back (`draft`, `$999.00`); site's legacy `send_invoice` route not invoked because it emails on success; math unit-tested; see §4 |
-| 18 | Manual collection, no auto-charge | **VERIFIED** | Payload uses `collection_method: send_invoice`; no charge code path exists |
+| 15 | Card-on-file setup flow | **IMPLEMENTED BUT UNVERIFIED** | `/deposit/save-card` + `POST /api/whop/save-card`; invalid token → `422 card_rejected`; no real card saved. Responses now expose only `accountLinked`, `buyerLinked`, `paymentMethodOnFile` |
+| 16 | Saved method reference retrieval | **BLOCKED** | Code now handles `setup_intent.succeeded/canceled/requires_action` and verifies the echoed `account_id`; production `WHOP_WEBHOOK_SECRET` is still absent (`503 not_configured`) and no card has been saved |
+| 17 | Whop Invoices API for remaining balance | **IMPLEMENTED BUT UNVERIFIED** | Route now requires a real paid `pay_` deposit and derives the credit from Whop; no paid deposit exists, so the success path is unexecuted. Native draft is not accepted as proof; see §4 |
+| 18 | Manual collection, no auto-charge | **VERIFIED** | Invoice payload uses `collection_method: send_invoice` **and** `save_as_draft: true`; no charge call exists and the draft is sent manually by an operator |
 | 19 | Estimate form creates a real Whop Lead | **VERIFIED** | Lead `lead_kKXGVRmMm1mPo`, request `est_80b45c52eebe469cb807666ef8a4598a`, `tracked: true` |
 | 20 | No fixed/fake user id | **VERIFIED** | Lead uses the OAuth-authenticated user; `/api/leads` rejects anonymous requests |
 | 21 | `estimate_requested` event | **VERIFIED** | Whop Events API: 1 event, `evt_est_80b45c52eebe469cb807666ef8a4598a` |
 | 22 | `service_viewed` event | **VERIFIED** | Whop Events API: 19 events in the review window |
 | 23 | `deposit_started` on deposit start only | **VERIFIED** | Whop Events API: 1 event for 5 `/deposit` page views in the same sample |
 | 24 | Pixel installed on the live site | **VERIFIED** | `POST /events/validate_pixel`: `installed: true`, `reachable: true`, `last_seen_days: 0` |
-| 25 | Tests: typecheck, unit, leakage, endpoints | **VERIFIED** | `tsc --noEmit` clean; 113 tests / 9 files pass; live endpoint matrix in §6 |
-| 26 | Source repo / ZIP | **VERIFIED** | Git commit containing this report + `summitaa-roofing-source.zip` rebuilt from it; archive excludes `node_modules`, `dist`, `.git`, `.dev.vars` |
+| 25 | Tests: typecheck, unit, leakage, endpoints | **VERIFIED** | `tsc --noEmit` clean; 124 tests / 9 files / 426 assertions pass; build clean; endpoint matrix in §6 |
+| 26 | Source repo / ZIP | **VERIFIED** | Commit containing this report + `summitaa-roofing-source.zip` rebuilt from it; archive excludes `node_modules`, `dist`, `.git`, `.dev.vars` |
 
 ---
 
@@ -122,18 +122,24 @@ docs' example creates the payment with `account_id`, `variant_id`,
 `confirmation_token`, and `return_url` only. The method is vaulted when the
 consent is attested on the token.
 
-### 3.2 Reference retrieval and safety
+### 3.2 Reference retrieval, linkage, and safety
 
 - The saved method's reference is `payt_...`, delivered on `payment.succeeded`
   (save during checkout) or on the Setup Intent (setup mode). Whop stores the
   method; the site never stores or logs a card number, CVV, or expiry.
-- `getSetupIntentStatus()` reads `payment_method_id` but the public route does
-  not return it; the return page only exposes status booleans.
-- The webhook route forwards the exact verified payload to an operator endpoint
-  when configured, so `payment_method_id` is preserved there.
+- `createSetupIntent()` and `getSetupIntentStatus()` now read `account_id`,
+  `member_id`, and `payment_method_id`. The server rejects an intent that echoes
+  a different `account_id` (`setup_intent_mismatch`).
+- The browser receives only booleans: `accountLinked`, `buyerLinked`, and
+  `paymentMethodOnFile`. Member IDs and payment-method references stay on the
+  server and are never serialized into a response.
+- `src/lib/webhooks.ts` now recognizes `setup_intent.succeeded`,
+  `setup_intent.canceled`, and `setup_intent.requires_action` in addition to the
+  three payment events. The receiver forwards them like payment events; none is
+  treated as a charge.
 - **Blocker:** production has no `WHOP_WEBHOOK_SECRET` (live route returns
-  `503 not_configured`), so `payment.succeeded` cannot be verified or consumed
-  today. Until it is set, the merchant reads the saved method in Whop.
+  `503 not_configured`), so no event can be verified or consumed today. Until it
+  is set, the merchant reads the saved method in Whop.
 - Webhook management needs an API-key login with `developer:manage_webhook`;
   the current CLI session is OAuth-only and was refused for that scope.
 
@@ -157,69 +163,81 @@ consent is attested on the token.
 
 ## 4. Priority 3 — Final invoice
 
-### 4.1 What the code does
+### 4.1 What the code does now
 
 `POST /api/whop/final-invoice` (operator bearer, constant-time compare,
-same-origin) takes `projectTotalCents` and an explicit `depositCreditCents`,
-computes `balanceDueCents`, builds a project line and a negative deposit-credit
-line, and calls the legacy Invoices API with `collection_method: "send_invoice"`.
+same-origin) accepts `projectTotalCents`, the customer fields, and a required
+`depositPaymentId` (`pay_...`). It **rejects** any `depositCreditCents` in the
+request. The server then:
+
+1. Fetches the payment from Whop (`GET /payments/{id}`).
+2. Requires `status` to be paid/succeeded.
+3. Requires `account_id` to equal `biz_wHs7ScZ5eHIZrH`.
+4. Requires `variant_id` to equal `plan_NlxIPUOrmzS6E`.
+5. Requires `metadata.project_ref` to equal the invoice project reference.
+6. Requires `subtotal.amount` to equal `WHOP_DEPOSIT_AMOUNT_CENTS` ($500).
+7. Requires `subtotal.currency` to equal `WHOP_DEPOSIT_CURRENCY` (usd).
+
+Only then is the Whop subtotal used as the deposit credit. The balance is
+`project total − verified deposit`, and the idempotency key includes the
+`pay_` reference so two different deposits can never reuse one key.
 
 | Check | Result |
 | - | - |
-| Foreign origin | `403 forbidden` |
-| No bearer token | `401 unauthorized` |
-| Missing amount | `400 invalid_input` with field errors |
-| Credit > total | `400 credit_exceeds_total` |
-| Math and limits | Covered by `tests/invoice.test.js`; balance = total − explicit credit, minimum 50¢, currency must match, due date 1–90 days |
+| Foreign origin | `403 forbidden` (observed locally) |
+| No bearer token | `401 unauthorized` (observed locally) |
+| Missing `depositPaymentId` | `400 invalid_input` (observed locally) |
+| Client sends `depositCreditCents` | `400 client_supplied_credit` (observed live) |
+| Fake `pay_` reference | `422 deposit_not_found` after a real Whop lookup (observed live) |
+| Native draft `pay_udLKGPtjzXHqm3` | `422 deposit_not_verified`, reason `deposit_not_paid` (observed live) — the draft cannot be used as a deposit |
+| Unpaid / wrong account / wrong plan / wrong project / wrong amount / wrong currency | `422 deposit_not_verified` with a specific reason; covered by unit tests |
 | Auto-charge | None. No saved method is attached and no charge call exists |
+| Email on creation | None by design: the payload sets `save_as_draft: true`, which Whop documents as creating a draft "without sending or charging" |
 
-### 4.2 Native draft created; route still unexecuted
+### 4.2 What was actually executed
 
-1. **Native draft created and read back.** The OAuth credential has
-   `payment:charge` (the separate account API key does not).
-   `POST /invoices` with `Api-Version-Date: 2026-10-24` returned `201` and
-   created `pay_udLKGPtjzXHqm3` — number `#00000001`, status `draft`, total and
-   amount due `$999.00`. `GET /invoices/{id}` and `invoices list` both return
-   the same draft. A draft charges nothing, emails nobody, and sends no webhook.
-2. **The native draft cannot reproduce the credit line.** Native invoice items
-   are variants only, so the draft uses the real $999 repair variant for the net
-   balance ($1,499 project − $500 deposit = $999). The metadata records the
-   arithmetic; the negative deposit-credit line itself is a legacy feature.
-3. **The site route uses the legacy API.** `Api-Version-Date: 2026-09-22`
-   supports `line_items` plus an inline plan, which is what lets the route show
-   the project total and the negative deposit credit. Legacy invoices are
-   emailed by Whop (docs comparison table), so calling the route's success path
-   would email a real address; it was deliberately not invoked.
-4. **CLI cannot build the item list.** `whop invoices create` (CLI 0.30.0)
-   rejects every `items` object with `invalid_union` at `items.0`, reproduced
-   with two valid plans (`plan_NlxIPUOrmzS6E`, `plan_53arhuP2hflnI`) and the
-   documented `{"variant_id": "plan_..."}` shape. The native draft was therefore
-   created through the direct API, not the CLI.
+1. **The gate's failure paths were executed against the real route locally and
+   in production.** A fake `pay_` reference returned `422 deposit_not_found`,
+   proving the route performs a live Whop payment lookup rather than trusting
+   the request. In production, the native draft `pay_udLKGPtjzXHqm3` returned
+   `422 deposit_not_verified` with reason `deposit_not_paid`, so the draft is
+   explicitly rejected as a deposit.
+2. **No paid $500 deposit exists.** Without one, no request can pass the gate,
+   so no final invoice was created from this route.
+3. **The native draft cannot stand in for this flow.** `pay_udLKGPtjzXHqm3` is a
+   `draft`, is not a paid deposit, uses the $999 repair variant rather than the
+   $500 deposit plan, and carries no `project_ref` from a real deposit. The live
+   gate rejected it with `deposit_not_paid`. It is left untouched; see §4.3.
+4. **The legacy route's success path was not executed.** It now creates a draft
+   instead of emailing, but that claim rests on Whop's documented
+   `save_as_draft` behavior, not on an observed 201.
 
-### 4.3 Draft evidence (not sent, not charged)
+### 4.3 Draft evidence (not sent, not charged, not proof)
 
 | Check | Result |
 | - | - |
-| `POST /invoices` (native, OAuth) | `201 Created` |
+| `POST /invoices` (native, OAuth) | `201 Created` in an earlier pass |
 | Invoice | `pay_udLKGPtjzXHqm3`, `#00000001`, status `draft` |
 | Total / amount due | `$999.00` USD |
 | Read back | `GET /invoices/{id}` and `invoices list` return the same draft |
 | Metadata | `project_total_cents=149900`, `deposit_credit_cents=50000`, `balance_due_cents=99900` |
 | Send / charge / email | None |
 | Customer | The account owner's own email; a draft emails nobody |
+| Value as proof | **None for the deposit → invoice flow.** It was a non-charging API test only |
 
 The draft is left in place for review. Void it in the dashboard if it is not
 wanted.
 
-### 4.4 Safe way to finish the legacy route (account owner)
+### 4.4 What is still required to prove the real flow
 
-- **Review the native draft** and void it if it is not needed.
-- To exercise the site's legacy `/api/whop/final-invoice` success path, explicit
-  approval is required because Whop emails the invoice. Use the owner's address
-  and a test project reference, then void or delete the result immediately.
-- Alternatively, adapt the route to native invoices and accept that the negative
-  credit line becomes a net-balance variant. That is a code change and was not
-  made.
+1. A successful `$500` Payment Elements checkout against
+   `plan_NlxIPUOrmzS6E`, with a real card and the owner's explicit approval (or
+   Whop sandbox Elements once available).
+2. The resulting paid `pay_...` reference and its `project_ref` metadata.
+3. One operator call to `POST /api/whop/final-invoice` with that reference. The
+   route will verify the payment, compute `$1,499 − $500 = $999`, and create a
+   **draft** invoice. Nothing is emailed or charged.
+4. The operator reviews the draft in Whop and sends it manually.
 
 No invoice was sent or charged in this review.
 
@@ -263,14 +281,19 @@ page for the account.
 | `GET /deposit/save-card` | 200, setup-mode form, "no charge" copy |
 | `POST /api/whop/deposit` (invalid token) | `422 payment_rejected`, no charge |
 | `POST /api/whop/save-card` (invalid token) | `422 card_rejected`, nothing saved |
-| `GET /api/whop/save-card` (fake id) | `422 setup_unavailable` |
-| `POST /api/whop/final-invoice` | `403` / `401` / `400` as designed |
-| `POST /invoices` (native draft, OAuth) | `201`; `pay_udLKGPtjzXHqm3`, `draft`, `$999.00` |
-| `GET /invoices/{id}` / `invoices list` | Same draft; no send, charge, or email |
+| `GET /api/whop/save-card` (fake id) | `422 setup_unavailable` (live lookup) |
+| `POST /api/whop/final-invoice` (foreign origin) | `403 forbidden` (live) |
+| `POST /api/whop/final-invoice` (no bearer) | `401 unauthorized` (live) |
+| `POST /api/whop/final-invoice` (missing payment) | `400 invalid_input` (live) |
+| `POST /api/whop/final-invoice` (client credit) | `400 client_supplied_credit` (live) |
+| `POST /api/whop/final-invoice` (fake `pay_`) | `422 deposit_not_found` after a real lookup (live) |
+| `POST /api/whop/final-invoice` (native draft) | `422 deposit_not_verified` / `deposit_not_paid` (live) |
+| `POST /api/whop/final-invoice` (real paid deposit) | Not run — no paid deposit exists |
 | `POST /api/whop/webhook` (unsigned) | `503 not_configured` (secret absent) |
 | `GET /api/auth/whop/session` | `{"signedIn":true,...}` |
 | `bun run typecheck` | clean |
-| `bun test` | 113 pass, 0 fail, 355 assertions, 9 files |
+| `bun test` | 124 pass, 0 fail, 426 assertions, 9 files |
+| `bun run build` | clean; client + SSR + `dist/whop-build.zip` |
 | Key scan | No API key or `.dev.vars` value in `src/`, `public/`, or `dist/whop-build.zip` |
 | Log scan | `console.*` calls log only status/code/method — no card data, tokens, or emails |
 | Domain record (`domains list`) | `summitaa.whop.site`: `status: ready`, `apple_pay: ready`, `pixel: ready` |
@@ -282,17 +305,23 @@ page for the account.
 1. **Rotate the account API key** in the Whop dashboard (Developer → API keys).
    Production does not use it (the hosted proxy signs outbound calls), but it
    was displayed during setup.
-2. **Set up webhooks:** create an endpoint for
+2. **Treat app secrets as exposed if a terminal transcript is shared.** The
+   `whop apps get` command prints `WHOP_SESSION_SECRET`, `WHOP_OPERATOR_TOKEN`,
+   and a preview token. Rotate both values before sharing any recording or log
+   that contains that output.
+3. **Set up webhooks:** create an endpoint for
    `https://summitaa.whop.site/api/whop/webhook` with an API-key login that has
    `developer:manage_webhook`, then set `WHOP_WEBHOOK_SECRET` as an app secret.
-   This enables verified `payment.succeeded`, `setup_intent.succeeded`, and the
+   This enables verified `payment.succeeded`,
+   `setup_intent.succeeded/canceled/requires_action`, and the
    `payment_method_id` reference.
-3. **Review the native draft** `pay_udLKGPtjzXHqm3` (`$999.00`, `draft`) and
-   void it if it is not wanted. To test the site's legacy route end-to-end,
-   approve one emailed test invoice first; that route emails by design.
-4. **Decide on a real checkout test.** Only with explicit approval; otherwise
-   wait for Whop sandbox Elements.
-5. Optional: set `WHOP_ENABLE_FINAL_INVOICE=false` when the invoice route is not
+4. **Review the native draft** `pay_udLKGPtjzXHqm3` (`$999.00`, `draft`) and
+   void it if it is not wanted. It is not proof of the deposit flow and cannot
+   pass the new gate.
+5. **Decide on a real checkout test.** Only with explicit approval; otherwise
+   wait for Whop sandbox Elements. A successful $500 deposit is the one missing
+   input for the invoice proof.
+6. Optional: set `WHOP_ENABLE_FINAL_INVOICE=false` when the invoice route is not
    in use.
 
 ---
@@ -310,8 +339,32 @@ real Whop Leads tied to the signed-in user, fires three custom Whop Pixel
 conversion events (`estimate_requested`, `service_viewed`, `deposit_started`)
 with deduplicable event ids verified through the Whop Events API, implements
 card-on-file with a Whop Setup Intent (`setupFutureUsage="off_session"` on the
-deposit plus a separate setup-mode page), and implements the remaining-balance
-bill through the Whop Invoices API with an explicit deposit credit, using manual
-`send_invoice` collection rather than unauthorized automatic charging. A native
-`$999.00` draft (`pay_udLKGPtjzXHqm3`) was created and read back; it was never
-sent or charged.
+deposit plus a separate setup-mode page) including `account_id`/`member_id`
+linkage checks, and implements the remaining-balance bill through the Whop
+Invoices API. The invoice route accepts only a real paid `pay_` deposit,
+re-fetches it from Whop, verifies account, plan, project, amount, and currency,
+derives the credit from the verified payment, and creates the invoice as a
+draft (`save_as_draft: true`) for manual review and collection. No invoice was
+sent or charged. The earlier native `$999.00` draft
+(`pay_udLKGPtjzXHqm3`) is a separate API test, not proof of this flow.
+
+---
+
+## 9. Deployment record
+
+- **Before this pass:** `apbu_PNoDCCkxFCt6I`.
+- **Change set:** verified-deposit invoice gate; setup-intent webhook events;
+  setup-intent account/member linkage booleans; draft-only invoice payload;
+  tests and documents.
+- **Deployed build:** `apbu_GZCyGWJH163r5` (`status: approved`,
+  `is_production: true`, `https://summitaa.whop.site`).
+- **Post-deploy checks (live):** `/`, `/deposit?project=TEST-0001`, and
+  `/deposit/save-card` returned 200; the invoice route returned `403` for a
+  foreign origin, `401` without a bearer, `400` without a deposit reference,
+  `400 client_supplied_credit`, `422 deposit_not_found` for a fake `pay_`, and
+  `422 deposit_not_verified`/`deposit_not_paid` for the native draft; the
+  unsigned webhook returned `503 not_configured`; a fake setup intent returned
+  `422 setup_unavailable`.
+- **Not verified after deploy:** a successful paid deposit, a saved card, or a
+  created final invoice. No such request was sent because no paid deposit
+  exists.

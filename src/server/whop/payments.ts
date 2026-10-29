@@ -6,6 +6,7 @@ import {
   depositIdempotencyKey,
   isFailedStatus,
   isPaidStatus,
+  isPaymentId,
   normalizePaymentStatus,
   type NormalizedPaymentStatus,
 } from '../../lib/deposit'
@@ -13,7 +14,10 @@ import { asRecord, pickNumber, pickString, whopRequest } from './client'
 import { depositConfigurationIssues, getWhopServerConfig } from './config'
 
 const PAYMENTS_API_VERSION = '2026-09-22'
-const PAYMENT_ID_PATTERN = /^pay_[A-Za-z0-9]{6,120}$/
+
+// Re-exported for existing callers; the pattern lives in the client-safe lib so
+// the invoice gate and the API layer cannot drift apart.
+export { isPaymentId }
 
 export type CreatedDepositPayment = {
   id: string
@@ -31,12 +35,13 @@ export type DepositPaymentStatus = {
   pending: boolean
   projectRef: string
   amountMajor: string | null
+  amountCents: number | null
   currency: string | null
   displayDecimals: number | null
-}
-
-export function isPaymentId(value: unknown): value is string {
-  return typeof value === 'string' && PAYMENT_ID_PATTERN.test(value)
+  accountId: string | null
+  planId: string | null
+  memberId: string | null
+  paymentMethodId: string | null
 }
 
 /**
@@ -118,8 +123,16 @@ export async function getDepositPayment(paymentId: string): Promise<DepositPayme
     pending: !isPaidStatus(status) && !isFailedStatus(status),
     projectRef: pickString(metadata, 'project_ref') ?? '',
     amountMajor: subtotalAmount,
+    amountCents:
+      subtotalAmount !== null && /^\d+(\.\d+)?$/.test(subtotalAmount)
+        ? Math.round(Number(subtotalAmount) * 100)
+        : null,
     currency: pickString(subtotal, 'currency'),
     displayDecimals:
       typeof subtotal.display_decimals === 'number' ? subtotal.display_decimals : null,
+    accountId: pickString(record, 'account_id'),
+    planId: pickString(record, 'variant_id'),
+    memberId: pickString(record, 'member_id'),
+    paymentMethodId: pickString(record, 'payment_method_id'),
   }
 }

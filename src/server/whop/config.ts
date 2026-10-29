@@ -126,6 +126,12 @@ export function finalInvoiceConfigurationIssues(config: WhopServerConfig): strin
     issues.push('WHOP_ENABLE_FINAL_INVOICE is not set to "true".')
   }
 
+  // The invoice credit is only accepted after a live payment lookup, so the
+  // deposit plan, amount, and currency must be configured too.
+  for (const issue of depositConfigurationIssues(config)) {
+    if (!issues.includes(issue)) issues.push(issue)
+  }
+
   return issues
 }
 

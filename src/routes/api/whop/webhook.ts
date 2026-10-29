@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 
 import { whopPublicConfig } from '../../../config/whop'
 import {
-  isPaymentWebhookType,
+  isHandledWebhookType,
   parseWebhookEnvelope,
   readWebhookHeaders,
   verifyWhopWebhook,
@@ -70,7 +70,7 @@ export const Route = createFileRoute('/api/whop/webhook')({
           return jsonResponse({ ok: true, ignored: true, reason: 'account_mismatch' })
         }
 
-        if (!isPaymentWebhookType(envelope.type)) {
+        if (!isHandledWebhookType(envelope.type)) {
           return jsonResponse({ ok: true, ignored: true, reason: 'unhandled_event_type' })
         }
 

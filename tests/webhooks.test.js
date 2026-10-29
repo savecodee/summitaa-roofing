@@ -1,10 +1,14 @@
 import { describe, expect, test } from 'bun:test'
 
 import {
+  HANDLED_WEBHOOK_TYPES,
+  isHandledWebhookType,
   isPaymentWebhookType,
+  isSetupIntentWebhookType,
   parseWebhookEnvelope,
   PAYMENT_WEBHOOK_TYPES,
   readWebhookHeaders,
+  SETUP_INTENT_WEBHOOK_TYPES,
   verifyWhopWebhook,
   WEBHOOK_TOLERANCE_SECONDS,
 } from '../src/lib/webhooks.ts'
@@ -257,11 +261,22 @@ describe('webhook headers and envelope', () => {
     ).toBeNull()
   })
 
-  test('only the three payment events are handled', () => {
+  test('only the three payment events and three setup-intent events are handled', () => {
     for (const type of PAYMENT_WEBHOOK_TYPES) {
       expect(isPaymentWebhookType(type)).toBe(true)
+      expect(isHandledWebhookType(type)).toBe(true)
     }
     expect(isPaymentWebhookType('payment.updated')).toBe(false)
     expect(isPaymentWebhookType('membership.created')).toBe(false)
+
+    for (const type of SETUP_INTENT_WEBHOOK_TYPES) {
+      expect(isSetupIntentWebhookType(type)).toBe(true)
+      expect(isHandledWebhookType(type)).toBe(true)
+      expect(isPaymentWebhookType(type)).toBe(false)
+    }
+
+    expect(HANDLED_WEBHOOK_TYPES).toHaveLength(6)
+    expect(isHandledWebhookType('setup_intent.created')).toBe(false)
+    expect(isHandledWebhookType('membership.created')).toBe(false)
   })
 })

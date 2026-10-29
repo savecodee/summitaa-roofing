@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 
+import { whopPublicConfig } from '../../../config/whop'
 import { isConfirmationToken, isDepositAttemptId } from '../../../lib/deposit'
 import { normalizeProjectRef } from '../../../lib/project'
 import { buildSaveCardReturnUrl, isSetupIntentId } from '../../../lib/save-card'
@@ -10,7 +11,11 @@ import {
   WhopTransportError,
 } from '../../../server/whop/client'
 import { getWhopServerConfig } from '../../../server/whop/config'
-import { createSetupIntent, getSetupIntentStatus } from '../../../server/whop/setup-intents'
+import {
+  createSetupIntent,
+  getSetupIntentStatus,
+  SetupIntentAccountMismatchError,
+} from '../../../server/whop/setup-intents'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -47,8 +52,23 @@ export const Route = createFileRoute('/api/whop/save-card')({
             canceled: status.canceled,
             requiresAction: status.requiresAction,
             processing: status.processing,
+            // Linkage is reported as booleans only; member and payment-method
+            // references stay on the server.
+            accountLinked: status.accountId === whopPublicConfig.accountId,
+            buyerLinked: Boolean(status.memberId),
+            paymentMethodOnFile: status.succeeded && Boolean(status.paymentMethodId),
           })
         } catch (error) {
+          if (error instanceof SetupIntentAccountMismatchError) {
+            return jsonResponse(
+              {
+                ok: false,
+                code: 'setup_intent_mismatch',
+                message: 'The saved card does not belong to this business.',
+              },
+              { status: 422 },
+            )
+          }
           if (error instanceof WhopNotConfiguredError) {
             return jsonResponse(
               { ok: false, code: 'not_configured', message: 'Card saving is not configured.' },
@@ -147,8 +167,23 @@ export const Route = createFileRoute('/api/whop/save-card')({
             clientSecret: setup.clientSecret,
             saved: setup.status === 'succeeded',
             canceled: setup.status === 'canceled' || setup.status === 'failed',
+            accountLinked: setup.accountId === whopPublicConfig.accountId,
+            buyerLinked: Boolean(setup.memberId),
+            paymentMethodOnFile:
+              setup.status === 'succeeded' && Boolean(setup.paymentMethodId),
           })
         } catch (error) {
+          if (error instanceof SetupIntentAccountMismatchError) {
+            return jsonResponse(
+              {
+                ok: false,
+                code: 'setup_intent_mismatch',
+                message: 'The card was not saved for this business. Nothing was charged.',
+              },
+              { status: 422 },
+            )
+          }
+
           if (error instanceof WhopNotConfiguredError) {
             return jsonResponse(
               {

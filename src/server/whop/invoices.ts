@@ -10,6 +10,11 @@ import { asRecord, pickString, whopRequest } from './client'
  * native invoice API, which only accepts variant items rather than an inline
  * one-time plan. The legacy shape is what supports a project total plus an
  * explicit negative deposit-credit line.
+ *
+ * `save_as_draft: true` is deliberate. Whop documents it as creating the
+ * invoice "as a draft without sending or charging", so this server call can
+ * never email the customer or move money; an operator reviews the draft and
+ * sends it manually in Whop.
  */
 const INVOICES_API_VERSION = '2026-09-22'
 
@@ -29,6 +34,7 @@ export async function createFinalInvoice(draft: FinalInvoiceDraft): Promise<Crea
       account_id: whopPublicConfig.accountId,
       product_id: whopPublicConfig.productId,
       collection_method: 'send_invoice',
+      save_as_draft: true,
       customer_name: draft.customerName,
       email_address: draft.email,
       due_date: draft.dueDate,

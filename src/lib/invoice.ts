@@ -1,13 +1,13 @@
-import { centsToMajorUnits } from './deposit'
+import { centsToMajorUnits, isPaidStatus, isPaymentId } from './deposit'
 import { isValidEmail, sanitizeText } from './estimate'
 import { normalizeProjectRef } from './project'
 
 /**
- * Final-invoice math.
+ * Final-invoice math and the deposit gate.
  *
- * The deposit is applied exactly once and only when the operator explicitly
- * supplies `depositCreditCents` after reconciling the deposit payment in Whop.
- * The site never infers that a deposit was paid.
+ * A deposit credit is never accepted from a request body. `validateFinalInvoice`
+ * only reads credit from the `deposit` option, and the operator route builds
+ * that option from a Whop payment it fetched and verified server-side.
  */
 
 export type InvoiceLineItem = {
@@ -21,6 +21,7 @@ export type FinalInvoiceDraft = {
   customerName: string
   email: string
   projectTotalCents: number
+  depositPaymentId: string | null
   depositCreditCents: number
   balanceDueCents: number
   currency: string
@@ -35,6 +36,7 @@ export type FinalInvoiceErrorCode =
   | 'credit_exceeds_total'
   | 'nothing_due'
   | 'currency_mismatch'
+  | 'client_supplied_credit'
 
 export type FinalInvoiceResult =
   | { ok: true; draft: FinalInvoiceDraft }
@@ -75,16 +77,37 @@ export function invoiceIdempotencyKey(
   projectRef: string,
   projectTotalCents: number,
   depositCreditCents: number,
+  depositPaymentId?: string | null,
 ): string {
-  return `invoice-${projectRef}-${projectTotalCents}-${depositCreditCents}`.slice(0, 200)
+  const base = `invoice-${projectRef}-${projectTotalCents}-${depositCreditCents}`
+  return (depositPaymentId ? `${base}-${depositPaymentId}` : base).slice(0, 200)
+}
+
+export type VerifiedDepositInput = {
+  paymentId: string
+  creditCents: number
 }
 
 export function validateFinalInvoice(
   raw: unknown,
-  options: { currency: string; now?: Date },
+  options: { currency: string; now?: Date; deposit?: VerifiedDepositInput | null },
 ): FinalInvoiceResult {
   if (!isRecord(raw)) {
     return { ok: false, code: 'invalid_input', message: 'Invalid invoice request.' }
+  }
+
+  // The operator can no longer assert a credit. Only a payment fetched from
+  // Whop and verified by `verifyDepositForInvoice` may reduce the balance.
+  if ('depositCreditCents' in raw) {
+    return {
+      ok: false,
+      code: 'client_supplied_credit',
+      message: 'The deposit credit is derived from a verified Whop payment.',
+      fields: {
+        depositCreditCents:
+          'Remove this field. Send depositPaymentId so the server can verify the payment.',
+      },
+    }
   }
 
   const fields: Record<string, string> = {}
@@ -102,9 +125,11 @@ export function validateFinalInvoice(
     fields.projectTotalCents = 'Enter the project total in cents.'
   }
 
-  const depositCreditCents = toInteger(raw.depositCreditCents ?? 0)
-  if (depositCreditCents === null) {
-    fields.depositCreditCents = 'Enter the deposit credit in cents.'
+  const depositPaymentId = options.deposit?.paymentId ?? null
+  const depositCreditCents = options.deposit?.creditCents ?? 0
+
+  if (depositPaymentId !== null && !isPaymentId(depositPaymentId)) {
+    fields.depositPaymentId = 'Use a valid Whop payment reference.'
   }
 
   const dueInDays = toInteger(raw.dueInDays ?? INVOICE_LIMITS.defaultDueDays)
@@ -130,12 +155,7 @@ export function validateFinalInvoice(
     }
   }
 
-  if (
-    Object.keys(fields).length > 0 ||
-    !projectRef ||
-    projectTotalCents === null ||
-    depositCreditCents === null
-  ) {
+  if (Object.keys(fields).length > 0 || !projectRef || projectTotalCents === null) {
     return {
       ok: false,
       code: 'invalid_input',
@@ -156,12 +176,17 @@ export function validateFinalInvoice(
     }
   }
 
-  if (depositCreditCents < 0 || depositCreditCents > INVOICE_LIMITS.maximumDepositCreditCents) {
+  if (
+    !Number.isSafeInteger(depositCreditCents) ||
+    depositCreditCents < 0 ||
+    depositCreditCents > INVOICE_LIMITS.maximumDepositCreditCents ||
+    (depositPaymentId !== null && depositCreditCents < 1)
+  ) {
     return {
       ok: false,
       code: 'amount_out_of_range',
-      message: 'The deposit credit is outside the allowed range.',
-      fields: { depositCreditCents: 'Enter a valid deposit credit.' },
+      message: 'The verified deposit credit is outside the allowed range.',
+      fields: { depositPaymentId: 'The verified deposit amount is not usable.' },
     }
   }
 
@@ -170,7 +195,7 @@ export function validateFinalInvoice(
       ok: false,
       code: 'credit_exceeds_total',
       message: 'The deposit credit cannot exceed the project total.',
-      fields: { depositCreditCents: 'Credit exceeds the project total.' },
+      fields: { projectTotalCents: 'The project total is lower than the verified deposit.' },
     }
   }
 
@@ -180,7 +205,7 @@ export function validateFinalInvoice(
       ok: false,
       code: 'nothing_due',
       message: 'The remaining balance is below the minimum chargeable amount.',
-      fields: { depositCreditCents: 'Leave a balance that can be invoiced.' },
+      fields: { projectTotalCents: 'Leave a balance that can be invoiced.' },
     }
   }
 
@@ -207,6 +232,7 @@ export function validateFinalInvoice(
       customerName,
       email,
       projectTotalCents,
+      depositPaymentId,
       depositCreditCents,
       balanceDueCents,
       currency,
@@ -216,9 +242,120 @@ export function validateFinalInvoice(
         projectRef,
         projectTotalCents,
         depositCreditCents,
+        depositPaymentId,
       ),
     },
   }
+}
+
+export type DepositPaymentEvidence = {
+  id: string
+  status: string
+  accountId: string | null
+  planId: string | null
+  projectRef: string
+  amountCents: number | null
+  currency: string | null
+}
+
+export type DepositVerificationReason =
+  | 'invalid_deposit_payment'
+  | 'deposit_not_paid'
+  | 'deposit_account_mismatch'
+  | 'deposit_plan_mismatch'
+  | 'deposit_project_mismatch'
+  | 'deposit_amount_mismatch'
+  | 'deposit_currency_mismatch'
+
+export type DepositVerificationResult =
+  | { ok: true; depositCreditCents: number }
+  | { ok: false; code: DepositVerificationReason; message: string }
+
+/**
+ * Proves a deposit before it can reduce a final invoice.
+ *
+ * Every fact comes from the payment Whop returned, never from the request:
+ * the payment must be paid, belong to the configured account and deposit plan,
+ * carry the same project reference, and match the configured amount and
+ * currency. Any missing field fails closed.
+ */
+export function verifyDepositForInvoice(input: {
+  payment: DepositPaymentEvidence
+  expected: {
+    accountId: string
+    planId: string
+    projectRef: string
+    amountCents: number
+    currency: string
+  }
+}): DepositVerificationResult {
+  const { payment, expected } = input
+
+  if (!isPaymentId(payment.id)) {
+    return {
+      ok: false,
+      code: 'invalid_deposit_payment',
+      message: 'The deposit reference is not a Whop payment.',
+    }
+  }
+
+  if (!isPaidStatus(payment.status)) {
+    return {
+      ok: false,
+      code: 'deposit_not_paid',
+      message: 'Whop has not confirmed this deposit as paid.',
+    }
+  }
+
+  if (!payment.accountId || payment.accountId !== expected.accountId) {
+    return {
+      ok: false,
+      code: 'deposit_account_mismatch',
+      message: 'The deposit belongs to a different Whop account.',
+    }
+  }
+
+  if (!payment.planId || payment.planId !== expected.planId) {
+    return {
+      ok: false,
+      code: 'deposit_plan_mismatch',
+      message: 'The deposit was not paid against the configured deposit plan.',
+    }
+  }
+
+  const expectedProject = normalizeProjectRef(expected.projectRef)
+  const paidProject = normalizeProjectRef(payment.projectRef)
+  if (!expectedProject || !paidProject || paidProject !== expectedProject) {
+    return {
+      ok: false,
+      code: 'deposit_project_mismatch',
+      message: 'The deposit is linked to a different project.',
+    }
+  }
+
+  if (
+    payment.amountCents === null ||
+    !Number.isSafeInteger(payment.amountCents) ||
+    payment.amountCents !== expected.amountCents
+  ) {
+    return {
+      ok: false,
+      code: 'deposit_amount_mismatch',
+      message: 'The deposit amount does not match the configured deposit.',
+    }
+  }
+
+  const paidCurrency = payment.currency?.trim().toLowerCase() ?? ''
+  const expectedCurrency = expected.currency.trim().toLowerCase()
+  if (!paidCurrency || !expectedCurrency || paidCurrency !== expectedCurrency) {
+    return {
+      ok: false,
+      code: 'deposit_currency_mismatch',
+      message: 'The deposit currency does not match the configured deposit.',
+    }
+  }
+
+  return { ok: true, depositCreditCents: payment.amountCents }
 }
 
 /**

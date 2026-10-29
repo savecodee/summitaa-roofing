@@ -19,11 +19,24 @@ import { getWhopServerConfig } from './config'
  */
 const SETUP_INTENTS_API_VERSION = '2026-10-24'
 
+/**
+ * The setup intent was created for, or resolved to, a different Whop account
+ * than the one this site sells under. The route refuses to report it as saved.
+ */
+export class SetupIntentAccountMismatchError extends Error {
+  constructor() {
+    super('setup_intent_account_mismatch')
+    this.name = 'SetupIntentAccountMismatchError'
+  }
+}
+
 export type CreatedSetupIntent = {
   id: string
   status: string
   clientSecret: string | null
   paymentMethodId: string | null
+  accountId: string | null
+  memberId: string | null
 }
 
 export type SetupIntentStatus = {
@@ -34,6 +47,8 @@ export type SetupIntentStatus = {
   requiresAction: boolean
   processing: boolean
   paymentMethodId: string | null
+  accountId: string | null
+  memberId: string | null
 }
 
 function readSetupIntent(payload: unknown, fallbackId?: string): CreatedSetupIntent {
@@ -41,11 +56,23 @@ function readSetupIntent(payload: unknown, fallbackId?: string): CreatedSetupInt
   const nested = asRecord(record.setup_intent)
   const source = pickString(nested, 'id') ? nested : record
 
+  // A nested resource may omit linkage fields that sit on the envelope, so
+  // read from the chosen object first and fall back to the root.
+  const read = (key: string) => pickString(source, key) ?? pickString(record, key)
+
   return {
     id: pickString(source, 'id') ?? fallbackId ?? '',
     status: pickString(source, 'status') ?? 'unknown',
     clientSecret: pickString(source, 'client_secret'),
-    paymentMethodId: pickString(source, 'payment_method_id'),
+    paymentMethodId: read('payment_method_id'),
+    accountId: read('account_id'),
+    memberId: read('member_id'),
+  }
+}
+
+function assertConfiguredAccount(accountId: string | null): void {
+  if (accountId && accountId !== whopPublicConfig.accountId) {
+    throw new SetupIntentAccountMismatchError()
   }
 }
 
@@ -81,6 +108,7 @@ export async function createSetupIntent(input: {
 
   const created = readSetupIntent(payload)
   if (!isSetupIntentId(created.id)) throw new Error('invalid_setup_intent_response')
+  assertConfiguredAccount(created.accountId)
   return created
 }
 
@@ -94,6 +122,7 @@ export async function getSetupIntentStatus(setupIntentId: string): Promise<Setup
 
   const created = readSetupIntent(payload, setupIntentId)
   const status = normalizeSetupIntentStatus(created.status)
+  assertConfiguredAccount(created.accountId)
 
   return {
     id: created.id,
@@ -103,5 +132,7 @@ export async function getSetupIntentStatus(setupIntentId: string): Promise<Setup
     requiresAction: status === 'requires_action' || status === 'requires_confirmation',
     processing: !['succeeded', 'canceled', 'failed', 'void'].includes(status),
     paymentMethodId: created.paymentMethodId,
+    accountId: created.accountId,
+    memberId: created.memberId,
   }
 }
