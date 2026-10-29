@@ -40,7 +40,7 @@
 | 12 | Real sandbox/test Payment Elements checkout | **BLOCKED** | Whop: "The sandbox environment isn't available for Whop Elements yet"; sandbox also says not to use apps; see §2 |
 | 13 | No real card / no money moved | **VERIFIED** | No successful payment; invalid tokens return `422` and the response states no charge |
 | 14 | `setupFutureUsage="off_session"` on deposit | **VERIFIED** | Present on `<Payments>`; official save-during-checkout path |
-| 15 | Card-on-file setup flow | **IMPLEMENTED BUT UNVERIFIED** | `/deposit/save-card` + `POST /api/whop/save-card`; invalid token → `422 card_rejected`; no real card saved. Responses now expose only `accountLinked`, `buyerLinked`, `paymentMethodOnFile` |
+| 15 | Card-on-file setup flow | **IMPLEMENTED BUT UNVERIFIED** | `/deposit/save-card` + `POST /api/whop/save-card`; invalid token → `422 card_rejected`; no real card saved. Linkage is reported only as `accountLinked`, `buyerLinked`, `paymentMethodOnFile` |
 | 16 | Saved method reference retrieval | **BLOCKED** | Code now handles `setup_intent.succeeded/canceled/requires_action` and verifies the echoed `account_id`; production `WHOP_WEBHOOK_SECRET` is still absent (`503 not_configured`) and no card has been saved |
 | 17 | Whop Invoices API for remaining balance | **IMPLEMENTED BUT UNVERIFIED** | Route now requires a real paid `pay_` deposit and derives the credit from Whop; no paid deposit exists, so the success path is unexecuted. Native draft is not accepted as proof; see §4 |
 | 18 | Manual collection, no auto-charge | **VERIFIED** | Invoice payload uses `collection_method: send_invoice` **and** `save_as_draft: true`; no charge call exists and the draft is sent manually by an operator |
