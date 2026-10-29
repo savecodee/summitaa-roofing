@@ -24,6 +24,32 @@ export type CreatedInvoice = {
   url: string | null
 }
 
+/**
+ * Reads the legacy invoice response.
+ *
+ * The legacy `LegacyInvoice` schema defines the hosted payment link as
+ * `pay_online_url`; it does not define `invoice_url`, `hosted_url`, or `url`.
+ * Those names are kept as fallbacks because older callers/tests used them and a
+ * future response shape may add one, but the official field must win when both
+ * are present. A missing link is not treated as a failed creation: the invoice
+ * may still exist and be reviewed in Whop by its `inv_...` id.
+ */
+export function readCreatedInvoice(payload: unknown): CreatedInvoice {
+  const root = asRecord(payload)
+  const nested = asRecord(root.invoice)
+  const record = pickString(nested, 'id') ? nested : root
+
+  return {
+    id: pickString(record, 'id'),
+    status: pickString(record, 'status'),
+    url:
+      pickString(record, 'pay_online_url') ??
+      pickString(record, 'invoice_url') ??
+      pickString(record, 'hosted_url') ??
+      pickString(record, 'url'),
+  }
+}
+
 export async function createFinalInvoice(draft: FinalInvoiceDraft): Promise<CreatedInvoice> {
   const payload = await whopRequest('/invoices', {
     method: 'POST',
@@ -51,16 +77,5 @@ export async function createFinalInvoice(draft: FinalInvoiceDraft): Promise<Crea
     },
   })
 
-  const root = asRecord(payload)
-  const nested = asRecord(root.invoice)
-  const record = pickString(nested, 'id') ? nested : root
-
-  return {
-    id: pickString(record, 'id'),
-    status: pickString(record, 'status'),
-    url:
-      pickString(record, 'invoice_url') ??
-      pickString(record, 'hosted_url') ??
-      pickString(record, 'url'),
-  }
+  return readCreatedInvoice(payload)
 }

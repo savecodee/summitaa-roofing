@@ -2,8 +2,9 @@
 
 **Live site:** https://summitaa.whop.site
 **Whop app:** `app_wZYnrCcqbNft8J` · **Account:** `biz_wHs7ScZ5eHIZrH` · **Product:** `prod_UxTHDvkWPVf68`
-**Deployed build:** `apbu_GZCyGWJH163r5` (production, approved) — promoted in this pass
+**Deployed build:** `apbu_GZCyGWJH163r5` (production, approved) — unchanged in this pass
 **Invoice draft:** `pay_udLKGPtjzXHqm3` (native test draft, `draft`, `$999.00`, never sent or charged — **not** proof of the site's deposit flow; the live gate rejects it as `deposit_not_paid`)
+**Revision 2026-10-29:** invoice link mapping fixed and covered by tests; no deploy, no payment, no secret change. Local test suite: 166 passing.
 
 > Whop serves this app at `summitaa.whop.site`. `summitaa.whop.app` is not
 > provisioned and returns 404.
@@ -15,6 +16,8 @@
 - **IMPLEMENTED BUT UNVERIFIED** — code is deployed and its error paths are
   tested, but the success path still needs an approval, a card, a wallet, or a
   permission that was not available in this review.
+- **VERIFIED WITH CAVEAT** — the stated fact is directly confirmed, but a newer
+  local change is not yet committed, archived, or deployed.
 - **BLOCKED** — an external constraint prevents completion; the specific
   constraint is named.
 - **NOT APPLICABLE** — the requirement's premise does not hold; the reason and
@@ -36,13 +39,13 @@
 | 8 | Real plan: Standard Roof Repair $999 | **VERIFIED** | `plan_EFVJjO467EmuD`, one-time, USD, visible |
 | 9 | Whop Payment Elements only | **VERIFIED** | `<Payments>` + `PaymentElement` + `EmailElement` + `BrandingElement`; no Stripe/PayPal/custom card inputs in `src/` |
 | 10 | `BrandingElement` present | **VERIFIED** | Branding iframe loads from `cdn.whop.com/elements/.../branding/` on both payment pages |
-| 11 | `ExpressCheckoutElement` for wallets | **NOT APPLICABLE** | Exclusive to `<Checkout>`, has no pre-payment callback, and cannot share the existing `<Payments>` handle; see §3.3 |
+| 11 | `ExpressCheckoutElement` for wallets | **NOT APPLICABLE** | Mounts only inside `<Checkout>`, is the exclusive alternative to `CheckoutElement`, completes the purchase in one press with no documented confirmation-token step, and exposes only `onLoaderStart`/`onReady`/`onError` on web — no pre-payment callback. The existing `<Payments>` + `PaymentElement` flow already offers Apple Pay/Google Pay tiles; the campaign's wallet requirement does not justify a second purchase path; see §3.3 |
 | 12 | Real sandbox/test Payment Elements checkout | **BLOCKED** | Whop: "The sandbox environment isn't available for Whop Elements yet"; sandbox also says not to use apps; see §2 |
 | 13 | No real card / no money moved | **VERIFIED** | No successful payment; invalid tokens return `422` and the response states no charge |
 | 14 | `setupFutureUsage="off_session"` on deposit | **VERIFIED** | Present on `<Payments>`; official save-during-checkout path |
 | 15 | Card-on-file setup flow | **IMPLEMENTED BUT UNVERIFIED** | `/deposit/save-card` + `POST /api/whop/save-card`; invalid token → `422 card_rejected`; no real card saved. Linkage is reported only as `accountLinked`, `buyerLinked`, `paymentMethodOnFile` |
 | 16 | Saved method reference retrieval | **BLOCKED** | Code now handles `setup_intent.succeeded/canceled/requires_action` and verifies the echoed `account_id`; production `WHOP_WEBHOOK_SECRET` is still absent (`503 not_configured`) and no card has been saved |
-| 17 | Whop Invoices API for remaining balance | **IMPLEMENTED BUT UNVERIFIED** | Route now requires a real paid `pay_` deposit and derives the credit from Whop; no paid deposit exists, so the success path is unexecuted. Native draft is not accepted as proof; see §4 |
+| 17 | Whop Invoices API for remaining balance | **IMPLEMENTED BUT UNVERIFIED** | Route requires a real paid `pay_` deposit and derives the credit from Whop; no paid deposit exists, so the live success path is still unexecuted. The official `pay_online_url` response field is now mapped (with fallbacks) and covered by mocked end-to-end tests; see §4 |
 | 18 | Manual collection, no auto-charge | **VERIFIED** | Invoice payload uses `collection_method: send_invoice` **and** `save_as_draft: true`; no charge call exists and the draft is sent manually by an operator |
 | 19 | Estimate form creates a real Whop Lead | **VERIFIED** | Lead `lead_kKXGVRmMm1mPo`, request `est_80b45c52eebe469cb807666ef8a4598a`, `tracked: true` |
 | 20 | No fixed/fake user id | **VERIFIED** | Lead uses the OAuth-authenticated user; `/api/leads` rejects anonymous requests |
@@ -50,8 +53,8 @@
 | 22 | `service_viewed` event | **VERIFIED** | Whop Events API: 19 events in the review window |
 | 23 | `deposit_started` on deposit start only | **VERIFIED** | Whop Events API: 1 event for 5 `/deposit` page views in the same sample |
 | 24 | Pixel installed on the live site | **VERIFIED** | `POST /events/validate_pixel`: `installed: true`, `reachable: true`, `last_seen_days: 0` |
-| 25 | Tests: typecheck, unit, leakage, endpoints | **VERIFIED** | `tsc --noEmit` clean; 125 tests / 9 files / 431 assertions pass; build clean; endpoint matrix in §6 |
-| 26 | Source repo / ZIP | **VERIFIED** | Commit containing this report + `summitaa-roofing-source.zip` rebuilt from it; archive excludes `node_modules`, `dist`, `.git`, `.dev.vars` |
+| 25 | Tests: typecheck, unit, leakage, endpoints | **VERIFIED** | `tsc --noEmit` clean; 166 tests / 13 files / 560 assertions pass; build clean; endpoint matrix in §6 |
+| 26 | Source repo / ZIP | **VERIFIED WITH CAVEAT** | Existing `summitaa-roofing-source.zip` matches commit `45108d1` and excludes `node_modules`, `dist`, `.git`, `.dev.vars`; the 2026-10-29 changes (2 modified, 4 new test files) are not committed or included yet |
 
 ---
 
@@ -145,19 +148,37 @@ consent is attested on the token.
 
 ### 3.3 `ExpressCheckoutElement` decision
 
-- Official constraint: it mounts **only** inside `<Checkout>` and is the
-  exclusive alternative to `CheckoutElement` in that handle. `PaymentElement`
-  is the other allowed option in the campaign.
-- The element exposes only `onLoaderStart`, `onReady`, and `onError`. There is no
-  pre-payment callback, so `deposit_started` — which must fire when the deposit
-  starts — could not be emitted on a wallet purchase. Adding it would create an
-  untracked second payment surface.
-- The domain record for `summitaa.whop.site` reports `apple_pay.state: "ready"`,
-  so the prerequisite is met, but wallet rendering and payment were **not**
-  verified on any device and are **not claimed**.
-- Decision: keep the single `PaymentElement` flow where tracking and server-side
-  amount checks are reliable; document the exclusion instead of shipping an
-  unverified path.
+Reviewed against the current official pages, `@whop/elements@1.9.0`:
+
+| Official statement | Source |
+| - | - |
+| `ExpressCheckoutElement` "mounts inside [`Checkout`]" and is **exclusive** with `CheckoutElement` in that handle | ExpressCheckoutElement reference |
+| It renders one-press Apple Pay / Google Pay / PayPal buttons and "one press finishes the purchase" | ExpressCheckoutElement reference |
+| Its web callbacks are only `onLoaderStart`, `onReady`, and `onError`; the purchase callback `onComplete` belongs to `<Checkout>` and fires "after the purchase stands" | ExpressCheckoutElement / Checkout references |
+| In the Express Checkout guide, "Whop renders the wallets the device can pay with and **confirms the payment for you**. Your server only listens for the webhook." | Add Express Checkout guide |
+| `PaymentElement`'s activation handler calls `payments.createConfirmationToken()`; the token is confirmed **server-side** | PaymentElement reference |
+| Both wallets need Apple Pay ready on the page's domain; self-hosted pages serve the association file and register the domain | Enable Apple Pay and Google Pay |
+
+Why it is **NOT APPLICABLE** to this deposit flow:
+
+- It cannot mount in the existing `<Payments>` handle. Adopting it would mean a
+  second `<Checkout>` purchase surface alongside the live `PaymentElement` flow.
+- It has no pre-payment callback and no documented confirmation-token step on
+  the client, so the `deposit_started` event could not fire at the documented
+  moment (the pay press), and the server could not run the existing
+  account/amount/project checks before accepting the deposit. Fulfillment
+  would depend entirely on a webhook that is not configured in production
+  today (`503 not_configured`).
+- The wallet requirement is already covered by the existing flow:
+  `PaymentElement` renders Apple Pay / Google Pay tiles when the domain and
+  device support them, while keeping the server-side confirmation and
+  verification path. `apple_pay.state` for `summitaa.whop.site` is `ready`, and
+  `/.well-known/apple-developer-merchantid-domain-association` returns `200`
+  (`text/plain`, 228 bytes). Actual wallet rendering and payment were **not**
+  verified on a device and are **not claimed**.
+- Decision: keep the single `PaymentElement` flow where tracking, amount checks,
+  and deposit verification are reliable. No `ExpressCheckoutElement` code was
+  added, and no second purchase path was created.
 
 ---
 
@@ -180,7 +201,11 @@ request. The server then:
 
 Only then is the Whop subtotal used as the deposit credit. The balance is
 `project total − verified deposit`, and the idempotency key includes the
-`pay_` reference so two different deposits can never reuse one key.
+`pay_` reference so two different deposits can never reuse one key. A retry of
+the same verified deposit reuses the same key inside Whop's idempotency window,
+so it returns the same invoice instead of creating a second one; a `409` is
+surfaced as `possible_duplicate` for manual review. A draft is never reported as
+sent or paid.
 
 | Check | Result |
 | - | - |
@@ -194,7 +219,34 @@ Only then is the Whop subtotal used as the deposit credit. The balance is
 | Auto-charge | None. No saved method is attached and no charge call exists |
 | Email on creation | None by design: the payload sets `save_as_draft: true`, which Whop documents as creating a draft "without sending or charging" |
 
-### 4.2 What was actually executed
+### 4.2 Invoice response mapping (fixed 2026-10-29)
+
+The official legacy invoice schema for `POST /invoices` (pinned with
+`Api-Version-Date: 2026-09-22`) defines the hosted payment link as
+`pay_online_url`:
+
+> `pay_online_url` — The checkout URL where the customer can pay this invoice
+> online, with their email address pre-filled and locked.
+
+It does **not** define `invoice_url`, `hosted_url`, or `url`. The previous code
+read only those three names, so a real response would have produced an invoice
+with a valid `inv_...` id but `url: null`.
+
+`readCreatedInvoice()` in `src/server/whop/invoices.ts` now:
+
+1. Prefers `pay_online_url`.
+2. Falls back to `invoice_url`, `hosted_url`, then `url` for compatibility.
+3. Supports both a flat response and a nested `{ invoice: { ... } }` envelope.
+4. Returns `url: null` — without throwing — when no field is present; the draft
+   still exists and can be reviewed by id in Whop.
+
+New tests in `tests/invoice-creation.test.js` cover every shape, the official
+field winning when several are present, empty strings, malformed payloads, the
+draft-only request payload, the dated API header, the idempotency key, `409`,
+`422`, and a transport failure. `tests/final-invoice-route.test.js` proves the
+same mapping through the operator route with a mocked paid deposit.
+
+### 4.3 What was actually executed
 
 1. **The gate's failure paths were executed against the real route locally and
    in production.** A fake `pay_` reference returned `422 deposit_not_found`,
@@ -207,12 +259,12 @@ Only then is the Whop subtotal used as the deposit credit. The balance is
 3. **The native draft cannot stand in for this flow.** `pay_udLKGPtjzXHqm3` is a
    `draft`, is not a paid deposit, uses the $999 repair variant rather than the
    $500 deposit plan, and carries no `project_ref` from a real deposit. The live
-   gate rejected it with `deposit_not_paid`. It is left untouched; see §4.3.
+   gate rejected it with `deposit_not_paid`. It is left untouched; see §4.4.
 4. **The legacy route's success path was not executed.** It now creates a draft
    instead of emailing, but that claim rests on Whop's documented
    `save_as_draft` behavior, not on an observed 201.
 
-### 4.3 Draft evidence (not sent, not charged, not proof)
+### 4.4 Draft evidence (not sent, not charged, not proof)
 
 | Check | Result |
 | - | - |
@@ -228,7 +280,7 @@ Only then is the Whop subtotal used as the deposit credit. The balance is
 The draft is left in place for review. Void it in the dashboard if it is not
 wanted.
 
-### 4.4 What is still required to prove the real flow
+### 4.5 What is still required to prove the real flow
 
 1. A successful `$500` Payment Elements checkout against
    `plan_NlxIPUOrmzS6E`, with a real card and the owner's explicit approval (or
@@ -289,14 +341,28 @@ page for the account.
 | `POST /api/whop/final-invoice` (fake `pay_`) | `422 deposit_not_found` after a real lookup (live) |
 | `POST /api/whop/final-invoice` (native draft) | `422 deposit_not_verified` / `deposit_not_paid` (live) |
 | `POST /api/whop/final-invoice` (real paid deposit) | Not run — no paid deposit exists |
-| `POST /api/whop/webhook` (unsigned) | `503 not_configured` (secret absent) |
+| `POST /api/whop/webhook` (unsigned) | `503 not_configured` in production (secret absent); `401 invalid_signature` locally with a secret |
+| `POST /api/whop/webhook` (tampered payload) | `401 invalid_signature` (automated test) |
+| `POST /api/whop/webhook` (official test event) | `200`, accepted, not forwarded (automated test) |
 | `GET /api/auth/whop/session` | `{"signedIn":true,...}` |
 | `bun run typecheck` | clean |
-| `bun test` | 125 pass, 0 fail, 431 assertions, 9 files |
-| `bun run build` | clean; client + SSR + `dist/whop-build.zip` |
+| `bun test` | 166 pass, 0 fail, 560 assertions, 13 files |
+| `bun run build` | clean; client + SSR + `dist/whop-build.zip` (55 entries; no `.dev.vars`, `.env`, or secret match) |
 | Key scan | No API key or `.dev.vars` value in `src/`, `public/`, or `dist/whop-build.zip` |
 | Log scan | `console.*` calls log only status/code/method — no card data, tokens, or emails |
 | Domain record (`domains list`) | `summitaa.whop.site`: `status: ready`, `apple_pay: ready`, `pixel: ready` |
+
+### 6.1 Automated no-money coverage added on 2026-10-29
+
+| Test file | What it proves |
+| - | - |
+| `tests/webhook-route.test.js` | `503` without a secret; `401` for unsigned/tampered requests; `400` for signed non-JSON; `200` for all six handled event types and official test events without forwarding; account mismatch and unhandled types ignored; forwarding preserves `x-summitaa-delivery`; `502` when the forward target is invalid or rejects |
+| `tests/payment-verification.test.js` | The route's `GET /payments/{id}` lookup reads status, account, plan, project, amount, and currency from Whop; failed/missing/wrong-account payments fail closed; invalid ids never reach the network |
+| `tests/invoice-creation.test.js` | `pay_online_url` and fallback mapping; flat and nested responses; draft-only payload; dated API header; stable idempotency key; `409`/`422`/transport errors |
+| `tests/final-invoice-route.test.js` | Mocked paid deposit → `201` draft with the official link; retry reuses the key; client credit rejected before lookup; failed/mismatched/missing deposit rejected; invoice `500` → `502 invoice_failed`; `409` → `possible_duplicate`; missing link still `201` with `url: null` |
+
+All four suites call a mocked `fetch`; no request reached Whop and no money
+moved.
 
 ---
 
@@ -310,17 +376,24 @@ page for the account.
    and a preview token. Rotate both values before sharing any recording or log
    that contains that output.
 3. **Set up webhooks:** create an endpoint for
-   `https://summitaa.whop.site/api/whop/webhook` with an API-key login that has
-   `developer:manage_webhook`, then set `WHOP_WEBHOOK_SECRET` as an app secret.
-   This enables verified `payment.succeeded`,
+   `https://summitaa.whop.site/api/whop/webhook` with an API-key login
+   (`whop login --api-key`) that has `developer:manage_webhook`, then set
+   `WHOP_WEBHOOK_SECRET` as an app secret. The current OAuth session was refused
+   with `403` ("requires an API-key login"), so this session could not create or
+   update the endpoint, and production has no secret today. Once set, this
+   enables verified `payment.succeeded`,
    `setup_intent.succeeded/canceled/requires_action`, and the
    `payment_method_id` reference.
 4. **Review the native draft** `pay_udLKGPtjzXHqm3` (`$999.00`, `draft`) and
    void it if it is not wanted. It is not proof of the deposit flow and cannot
    pass the new gate.
-5. **Decide on a real checkout test.** Only with explicit approval; otherwise
-   wait for Whop sandbox Elements. A successful $500 deposit is the one missing
-   input for the invoice proof.
+5. **Decide on a real `$500` deposit test.** This requires your explicit written
+   approval; nothing was charged. The card fee is 2.7% + $0.30 = **$13.80**;
+   refunding the $500 returns the principal but not the fee, so the net cost is
+   about **$13.80** (3-D Secure adds $0.03; international cards add 1.5%, FX
+   1%). A $149 inspection checkout costs about $4.32 but does **not** satisfy
+   the $500 deposit gate. This is the one missing input for the live invoice
+   proof; otherwise wait for Whop sandbox Elements.
 6. Optional: set `WHOP_ENABLE_FINAL_INVOICE=false` when the invoice route is not
    in use.
 
@@ -344,9 +417,14 @@ linkage checks, and implements the remaining-balance bill through the Whop
 Invoices API. The invoice route accepts only a real paid `pay_` deposit,
 re-fetches it from Whop, verifies account, plan, project, amount, and currency,
 derives the credit from the verified payment, and creates the invoice as a
-draft (`save_as_draft: true`) for manual review and collection. No invoice was
-sent or charged. The earlier native `$999.00` draft
+draft (`save_as_draft: true`) for manual review and collection, mapping the
+official `pay_online_url` field (with fallbacks) into the response. No invoice
+was sent or charged. The earlier native `$999.00` draft
 (`pay_udLKGPtjzXHqm3`) is a separate API test, not proof of this flow.
+`ExpressCheckoutElement` was evaluated and documented as not applicable because
+it is exclusive to `<Checkout>`, has no pre-payment callback, and would create a
+second purchase path outside the verified `<Payments>` flow; Apple Pay / Google
+Pay tiles remain available through `PaymentElement`.
 
 ---
 
@@ -358,6 +436,18 @@ sent or charged. The earlier native `$999.00` draft
   tests and documents.
 - **Deployed build:** `apbu_GZCyGWJH163r5` (`status: approved`,
   `is_production: true`, `https://summitaa.whop.site`).
+- **2026-10-29 pass (not deployed):** fixed the invoice response mapping to
+  read the official `pay_online_url`; added four no-money test files and
+  expanded the webhook route tests. Final local results: `bun test` 166 pass,
+  0 fail, 560 assertions, 13 files; `bun run typecheck` clean; `bun run build`
+  clean, `dist/whop-build.zip` 55 entries with no `.dev.vars`/`.env`/secret
+  match. The changes are uncommitted and production still runs
+  `apbu_GZCyGWJH163r5`. No deploy, payment, refund, invoice send, secret change,
+  or permission change was performed.
+- **Files changed in this pass:** `src/server/whop/invoices.ts`,
+  `tests/invoice-creation.test.js`, `tests/final-invoice-route.test.js`,
+  `tests/payment-verification.test.js`, `tests/webhook-route.test.js`, and
+  `REPORT.md`.
 - **Post-deploy checks (live):** `/`, `/deposit?project=TEST-0001`, and
   `/deposit/save-card` returned 200; the invoice route returned `403` for a
   foreign origin, `401` without a bearer, `400` without a deposit reference,
