@@ -7,6 +7,10 @@
   },
   "scripts": {
     "dev": "vite dev --port 3000",
+    "dev:live": "node ./scripts/use-env-profile.mjs live && vite dev --port 3000",
+    "dev:sandbox": "node ./scripts/use-env-profile.mjs sandbox && vite dev --port 3000",
+    "sandbox:extract-plans": "node ./scripts/extract-sandbox-plans.mjs",
+    "sandbox:use-live": "node ./scripts/use-env-profile.mjs live",
     "generate-routes": "tsr generate",
     "build": "vite build",
     "postbuild": "bun scripts/clean-build.mjs",

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { serviceCatalog, type ServiceValue } from '../../config/site'
+import { copy, serviceCatalog, type ServiceValue } from '@/config'
 import { trackServiceViewed } from '../../lib/tracking'
 import { ArrowRight, InspectionIcon, RepairIcon, ReplacementIcon } from './icons'
 import { Container, Eyebrow } from './primitives'
@@ -56,7 +56,7 @@ function ServiceCard({
     <article
       ref={cardRef}
       id={service.id}
-      className="group relative flex flex-col border border-line bg-paper p-6 transition-[border-color,box-shadow,transform] duration-300 hover:-translate-y-1 hover:border-ink/25 hover:shadow-[0_24px_50px_-36px_rgba(8,23,32,0.55)] sm:p-7"
+      className="group relative flex flex-col border border-line bg-paper p-6 transition-[border-color,box-shadow,transform] duration-300 hover:-translate-y-1 hover:border-ink/25 hover:shadow-service sm:p-7"
     >
       <span
         className="absolute inset-x-0 top-0 h-0.5 origin-left scale-x-0 bg-copper transition-transform duration-300 group-hover:scale-x-100"
@@ -114,17 +114,16 @@ export function Services({
       <Container className="py-20 sm:py-24 lg:py-32">
         <div className="grid gap-8 lg:grid-cols-[1fr_0.72fr] lg:items-end lg:gap-20">
           <div>
-            <Eyebrow>Services</Eyebrow>
+            <Eyebrow>{copy.services.eyebrow}</Eyebrow>
             <h2
               id="services-heading"
               className="mt-5 max-w-[680px] font-display text-[clamp(2.5rem,4.4vw,4.1rem)] font-medium leading-[1.02] tracking-[-0.035em] text-ink balance"
             >
-              The work your roof actually needs.
+              {copy.services.title}
             </h2>
           </div>
           <p className="max-w-md text-[15px] leading-[1.8] text-slate pretty lg:justify-self-end">
-            Three focused services, one standard of care: understand the problem, explain the
-            options, and put the scope in writing before the work begins.
+            {copy.services.intro}
           </p>
         </div>
 
@@ -139,12 +138,12 @@ export function Services({
         </div>
 
         <p className="mt-8 text-center text-[12px] text-slate">
-          Not sure where to start?{' '}
+          {copy.services.footerPrompt}{' '}
           <a
             href="#estimate"
             className="font-semibold text-ink underline decoration-copper/40 decoration-1 underline-offset-4 transition-colors hover:text-copper"
           >
-            Request an inspection and we&apos;ll help you sort it out.
+            {copy.services.footerLink}
           </a>
         </p>
       </Container>

@@ -16,6 +16,7 @@ const validValues = {
   name: 'Jordan Miller',
   email: 'jordan@example.com',
   phone: '(555) 010-2030',
+  address: '123 Main Street',
   zip: '12345',
   service: 'roof-repair',
   details: 'A leak above the garage.',
@@ -121,6 +122,8 @@ describe('estimate request parsing and bot controls', () => {
 
     expect(metadata.email).toBe('jordan@example.com')
     expect(metadata.phone).toBe('(555) 010-2030')
+    expect(metadata.address).toBe('123 Main Street')
+    expect(metadata.zip).toBe('12345')
     expect(metadata.request_id).toBe('est_1234567890abcdef')
     expect(estimateEventId(metadata.request_id)).not.toContain('jordan')
     expect(estimateEventId(metadata.request_id)).not.toContain('555')

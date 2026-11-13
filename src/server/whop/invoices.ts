@@ -1,6 +1,6 @@
 import '@tanstack/react-start/server-only'
 
-import { whopPublicConfig } from '../../config/whop'
+import { whopPublicConfig } from '@/config'
 import { centsToMajorUnits } from '../../lib/deposit'
 import type { FinalInvoiceDraft } from '../../lib/invoice'
 import { asRecord, pickString, whopRequest } from './client'
@@ -11,10 +11,10 @@ import { asRecord, pickString, whopRequest } from './client'
  * one-time plan. The legacy shape is what supports a project total plus an
  * explicit negative deposit-credit line.
  *
- * `save_as_draft: true` is deliberate. Whop documents it as creating the
- * invoice "as a draft without sending or charging", so this server call can
- * never email the customer or move money; an operator reviews the draft and
- * sends it manually in Whop.
+ * `save_as_draft: false` with `collection_method: 'charge_automatically'` and
+ * a `payment_method` will auto-charge the stored payment method.
+ * `collection_method: 'send_invoice'` without a payment method will send the
+ * invoice for manual payment.
  */
 const INVOICES_API_VERSION = '2026-09-22'
 
@@ -22,6 +22,7 @@ export type CreatedInvoice = {
   id: string | null
   status: string | null
   url: string | null
+  charged: boolean
 }
 
 /**
@@ -47,34 +48,59 @@ export function readCreatedInvoice(payload: unknown): CreatedInvoice {
       pickString(record, 'invoice_url') ??
       pickString(record, 'hosted_url') ??
       pickString(record, 'url'),
+    charged: pickString(record, 'status') === 'paid',
   }
 }
 
-export async function createFinalInvoice(draft: FinalInvoiceDraft): Promise<CreatedInvoice> {
+interface CreateInvoiceOptions {
+  draft: FinalInvoiceDraft
+  paymentMethodId?: string | null
+}
+
+/**
+ * Creates a final invoice. If `paymentMethodId` is provided, the invoice is
+ * created with `collection_method: 'charge_automatically'` and the stored
+ * payment method is charged immediately. Otherwise, the invoice is sent for
+ * manual payment via `collection_method: 'send_invoice'`.
+ *
+ * `save_as_draft: false` creates a real invoice (not a draft).
+ */
+export async function createFinalInvoice({
+  draft,
+  paymentMethodId,
+}: CreateInvoiceOptions): Promise<CreatedInvoice> {
+  const collectionMethod = paymentMethodId ? 'charge_automatically' : 'send_invoice'
+
+  const body: Record<string, unknown> = {
+    account_id: whopPublicConfig.accountId,
+    product_id: whopPublicConfig.productId,
+    collection_method: collectionMethod,
+    save_as_draft: false,
+    customer_name: draft.customerName,
+    email_address: draft.email,
+    due_date: draft.dueDate,
+    plan: {
+      currency: draft.currency,
+      plan_type: 'one_time',
+      initial_price: centsToMajorUnits(draft.balanceDueCents),
+    },
+    line_items: draft.lineItems.map((item) => ({
+      label: item.label,
+      quantity: item.quantity,
+      unit_price: item.unit_price,
+    })),
+  }
+
+  if (paymentMethodId) {
+    body.payment_method = paymentMethodId
+  }
+
   const payload = await whopRequest('/invoices', {
     method: 'POST',
     apiVersion: INVOICES_API_VERSION,
     idempotencyKey: draft.idempotencyKey,
     timeoutMs: 20_000,
-    body: {
-      account_id: whopPublicConfig.accountId,
-      product_id: whopPublicConfig.productId,
-      collection_method: 'send_invoice',
-      save_as_draft: true,
-      customer_name: draft.customerName,
-      email_address: draft.email,
-      due_date: draft.dueDate,
-      plan: {
-        currency: draft.currency,
-        plan_type: 'one_time',
-        initial_price: centsToMajorUnits(draft.balanceDueCents),
-      },
-      line_items: draft.lineItems.map((item) => ({
-        label: item.label,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-      })),
-    },
+    body,
   })
 
   return readCreatedInvoice(payload)

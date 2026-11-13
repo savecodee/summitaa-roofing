@@ -104,6 +104,15 @@ describe('deposit return URL', () => {
     expect(url).not.toContain('pay_')
     expect(url).not.toContain('token')
   })
+
+  test('adds only an allowlisted plan key to the return URL', () => {
+    expect(
+      buildDepositReturnUrl('https://summitaa.example', 'SUM-1042', 'inspection'),
+    ).toBe('https://summitaa.example/deposit/return?project=SUM-1042&plan=inspection')
+    expect(buildDepositReturnUrl('https://summitaa.example', 'SUM-1042', 'nope')).toBe(
+      'https://summitaa.example/deposit/return?project=SUM-1042',
+    )
+  })
 })
 
 describe('deposit amount verification', () => {
@@ -162,6 +171,18 @@ describe('deposit idempotency and metadata', () => {
     expect(first.length).toBeLessThanOrEqual(200)
   })
 
+  test('keeps the legacy idempotency key and separates self-serve plans', () => {
+    expect(depositIdempotencyKey('SUM-1042', 'att_12345678')).toBe(
+      'deposit-SUM-1042-att_12345678',
+    )
+    expect(depositIdempotencyKey('SUM-1042', 'att_12345678', 'repair')).toBe(
+      'deposit-SUM-1042-att_12345678-repair',
+    )
+    expect(depositIdempotencyKey('SUM-1042', 'att_12345678', 'nope')).toBe(
+      'deposit-SUM-1042-att_12345678',
+    )
+  })
+
   test('payment metadata contains only project identifiers', () => {
     const metadata = buildDepositMetadata('SUM-1042', 'att_12345678')
     expect(metadata).toEqual({
@@ -175,6 +196,19 @@ describe('deposit idempotency and metadata', () => {
     expect(serialized).not.toContain('@')
     expect(serialized).not.toContain('name')
     expect(serialized).not.toContain('phone')
+  })
+
+  test('adds the plan key to metadata only when it is allowlisted', () => {
+    expect(buildDepositMetadata('SUM-1042', 'att_12345678', 'inspection')).toEqual({
+      project_ref: 'SUM-1042',
+      request_id: 'att_12345678',
+      source: 'summitaa_roofing_deposit',
+      site: 'summitaa-roofing',
+      plan_key: 'inspection',
+    })
+    expect(buildDepositMetadata('SUM-1042', 'att_12345678', 'nope')).not.toHaveProperty(
+      'plan_key',
+    )
   })
 
   test('attempt IDs match the server pattern and are unique', () => {
@@ -211,7 +245,46 @@ describe('public deposit configuration', () => {
     expect(config.planId).toBe('plan_amUMyymLN6UCm')
     expect(config.amountCents).toBe(50_000)
     expect(config.amountLabel).toBe('$500.00')
+    expect(config.planKey).toBeNull()
+    expect(config.planName).toBeNull()
     expect(config.issues).toEqual([])
+  })
+
+  test('returns the public plan key and name for a self-serve plan', () => {
+    const config = publicDepositConfig({
+      accountId: 'biz_test',
+      planId: 'plan_3T6dfuJFNyOLG',
+      planKey: 'inspection',
+      planName: 'Roof Inspection',
+      amountCents: 14_900,
+      currency: 'usd',
+      issues: [],
+    })
+
+    expect(config).toMatchObject({
+      configured: true,
+      planId: 'plan_3T6dfuJFNyOLG',
+      planKey: 'inspection',
+      planName: 'Roof Inspection',
+      amountCents: 14_900,
+      amountLabel: '$149.00',
+    })
+  })
+
+  test('hides the plan key and name when configuration is incomplete', () => {
+    const config = publicDepositConfig({
+      accountId: 'biz_test',
+      planId: 'plan_3T6dfuJFNyOLG',
+      planKey: 'inspection',
+      planName: 'Roof Inspection',
+      amountCents: 14_900,
+      currency: 'usd',
+      issues: ['WHOP_API_KEY is not configured on the server.'],
+    })
+
+    expect(config.configured).toBe(false)
+    expect(config.planKey).toBeNull()
+    expect(config.planName).toBeNull()
   })
 
   test('any server configuration issue keeps the payment form hidden', () => {

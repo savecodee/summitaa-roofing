@@ -99,6 +99,7 @@ describe('public configuration surface', () => {
       'accountId',
       'appId',
       'baseUrl',
+      'environment',
       'plans',
       'productId',
     ])

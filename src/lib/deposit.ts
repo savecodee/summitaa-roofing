@@ -1,9 +1,12 @@
+import { isCheckoutPlanKey, type CheckoutPlanKey } from './checkout-plans'
 import { normalizeProjectRef } from './project'
 
 export type PublicDepositConfig = {
   configured: boolean
   accountId: string | null
   planId: string | null
+  planKey: CheckoutPlanKey | null
+  planName: string | null
   amountCents: number | null
   amountLabel: string | null
   currency: string
@@ -115,7 +118,11 @@ export function centsToMajorUnits(cents: number): number {
  * The return URL must be an absolute https URL (http is accepted only for
  * local development). It carries the project reference, but no customer data.
  */
-export function buildDepositReturnUrl(baseUrl: string, projectRef: string): string | null {
+export function buildDepositReturnUrl(
+  baseUrl: string,
+  projectRef: string,
+  planKey?: unknown,
+): string | null {
   const project = normalizeProjectRef(projectRef)
   if (!project) return null
 
@@ -129,14 +136,20 @@ export function buildDepositReturnUrl(baseUrl: string, projectRef: string): stri
 
     const returnUrl = new URL('/deposit/return', base.origin)
     returnUrl.searchParams.set('project', project)
+    if (isCheckoutPlanKey(planKey)) returnUrl.searchParams.set('plan', planKey)
     return returnUrl.toString()
   } catch {
     return null
   }
 }
 
-export function depositIdempotencyKey(projectRef: string, requestId: string): string {
-  return `deposit-${projectRef}-${requestId}`.slice(0, 200)
+export function depositIdempotencyKey(
+  projectRef: string,
+  requestId: string,
+  planKey?: unknown,
+): string {
+  const planSuffix = isCheckoutPlanKey(planKey) ? `-${planKey}` : ''
+  return `deposit-${projectRef}-${requestId}${planSuffix}`.slice(0, 200)
 }
 
 /**
@@ -164,18 +177,25 @@ export function depositAmountMatches(input: {
  * Payment metadata is the only project linkage sent to Whop. It deliberately
  * excludes names, emails, phone numbers, addresses, and payment details.
  */
-export function buildDepositMetadata(projectRef: string, requestId: string) {
+export function buildDepositMetadata(
+  projectRef: string,
+  requestId: string,
+  planKey?: unknown,
+) {
   return {
     project_ref: projectRef,
     request_id: requestId,
     source: 'summitaa_roofing_deposit',
     site: 'summitaa-roofing',
+    ...(isCheckoutPlanKey(planKey) ? { plan_key: planKey } : {}),
   } as const
 }
 
 export function publicDepositConfig(input: {
   accountId: string | null
   planId: string | null
+  planKey?: CheckoutPlanKey | null
+  planName?: string | null
   amountCents: number | null
   currency: string
   issues: string[]
@@ -196,6 +216,8 @@ export function publicDepositConfig(input: {
     configured,
     accountId: configured ? input.accountId : null,
     planId: configured ? input.planId : null,
+    planKey: configured ? input.planKey ?? null : null,
+    planName: configured ? input.planName ?? null : null,
     amountCents: configured ? input.amountCents : null,
     amountLabel:
       configured && input.amountCents ? formatCents(input.amountCents, input.currency) : null,

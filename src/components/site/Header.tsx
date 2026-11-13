@@ -1,13 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { navLinks, siteConfig } from '../../config/site'
+﻿import { useCallback, useEffect, useRef, useState } from 'react'
+import { copy, navLinks, siteConfig } from '@/config'
 import { ArrowRight, ArrowUpRight, Close, Menu, Phone } from './icons'
 import { ButtonLink, Container, Logo } from './primitives'
+
+const samplePhoneTitle = siteConfig.phone.isPlaceholder ? copy.header.samplePhoneTitle : undefined
 
 function PhoneCallLink({ compact = false }: { compact?: boolean }) {
   return (
     <a
       href={siteConfig.phone.href}
-      title="Sample phone number — replace before launch"
+      title={samplePhoneTitle}
       className={`group items-center gap-3 text-ink transition-colors hover:text-copper ${
         compact ? 'inline-flex' : 'hidden xl:inline-flex'
       }`}
@@ -17,7 +19,7 @@ function PhoneCallLink({ compact = false }: { compact?: boolean }) {
       </span>
       <span className="flex flex-col">
         <span className="text-[8px] font-bold uppercase tracking-[0.24em] text-slate">
-          Call us
+          {copy.header.callUs}
         </span>
         <span className="mt-0.5 text-[13px] font-semibold tracking-[0.02em]">
           {siteConfig.phone.display}
@@ -77,24 +79,24 @@ export function Header() {
         <Container className="flex min-h-10 items-center justify-between gap-4 py-2">
           <p className="hidden items-center gap-2.5 text-[9px] font-semibold uppercase tracking-[0.24em] text-cream/60 lg:flex">
             <span className="size-1.5 bg-copper" aria-hidden="true" />
-            Residential roofing · Repair · Replacement · Inspection
+            {copy.header.topBar}
           </p>
           <div className="flex w-full items-center justify-end gap-5 md:w-auto">
             <a
               href={siteConfig.phone.href}
               className="hidden items-center gap-2 whitespace-nowrap text-[11px] font-semibold tracking-[0.03em] text-cream/75 transition-colors hover:text-cream sm:flex"
               aria-label={`Call the sample phone number ${siteConfig.phone.display}. Replace it before launch.`}
-              title="Sample phone number — replace before launch"
+              title={samplePhoneTitle}
             >
               <Phone className="size-3 text-copper-light" />
               {siteConfig.phone.display}
             </a>
             <span className="hidden h-3 w-px bg-cream/20 sm:block" aria-hidden="true" />
             <a
-              href="/#estimate"
+              href="/#start"
               className="group inline-flex items-center gap-2 whitespace-nowrap text-[10px] font-bold uppercase tracking-[0.18em] text-cream transition-colors hover:text-copper-light"
             >
-              Request an estimate
+              {copy.header.requestEstimateLink}
               <ArrowRight className="size-3.5 transition-transform duration-200 group-hover:translate-x-0.5" />
             </a>
           </div>
@@ -122,19 +124,19 @@ export function Header() {
             <a
               href={siteConfig.phone.href}
               aria-label={`Call the sample phone number ${siteConfig.phone.display}. Replace it before launch.`}
-              title="Sample phone number — replace before launch"
+              title={samplePhoneTitle}
               className="grid size-10 place-items-center border border-ink/15 text-ink transition-colors hover:border-ink hover:bg-ink hover:text-cream xl:hidden"
             >
               <Phone className="size-4" />
             </a>
             <span className="hidden lg:block">
               <ButtonLink
-                href="/#estimate"
+                href="/#start"
                 variant="primary"
                 withArrow={false}
                 className="!min-h-10 !px-5 !py-2.5 !text-[12px]"
               >
-                Request an Estimate
+                {copy.header.requestEstimate}
               </ButtonLink>
             </span>
             <button
@@ -154,12 +156,12 @@ export function Header() {
         {open ? (
           <div
             id="mobile-navigation"
-            className="absolute inset-x-0 top-full max-h-[calc(100dvh-7.25rem)] overflow-y-auto border-b border-ink/10 bg-cream shadow-[0_24px_60px_-20px_rgba(8,23,32,0.35)] lg:hidden"
+            className="absolute inset-x-0 top-full max-h-[calc(100dvh-7.25rem)] overflow-y-auto border-b border-ink/10 bg-cream shadow-menu lg:hidden"
           >
             <Container className="py-7">
               <p className="flex items-center gap-3 text-[9px] font-bold uppercase tracking-[0.28em] text-slate">
                 <span className="h-px w-6 bg-copper" aria-hidden="true" />
-                Menu
+                {copy.header.menu}
               </p>
               <nav aria-label="Mobile primary" className="mt-3 border-t border-line">
                 {navLinks.map((link, index) => (
@@ -180,12 +182,12 @@ export function Header() {
 
               <div className="mt-6 grid gap-3 sm:grid-cols-2">
                 <ButtonLink
-                  href="/#estimate"
+                  href="/#start"
                   onClick={() => closeMenu()}
                   variant="primary"
                   className="w-full"
                 >
-                  Request an Estimate
+                  {copy.header.requestEstimate}
                 </ButtonLink>
                 <a
                   href={siteConfig.phone.href}
@@ -198,10 +200,7 @@ export function Header() {
                 </a>
               </div>
 
-              <p className="mt-4 text-[11px] leading-relaxed text-slate">
-                Phone number and service areas are sample placeholders. Actual contact details and
-                coverage will be confirmed before launch.
-              </p>
+              <p className="mt-4 text-[11px] leading-relaxed text-slate">{copy.header.mobileNote}</p>
             </Container>
           </div>
         ) : null}

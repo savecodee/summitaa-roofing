@@ -1,5 +1,17 @@
-import { useState, type MouseEventHandler, type ReactNode } from 'react'
+import { useState, useEffect, type MouseEventHandler, type ReactNode } from 'react'
+import { siteConfig } from '@/config'
 import { ArrowRight, LogoMark } from './icons'
+
+interface WhopPixel {
+  track?: (name: string, properties?: Record<string, unknown>) => void
+  setScope?: (...accountIds: string[]) => void
+}
+
+declare global {
+  interface Window {
+    whop?: WhopPixel
+  }
+}
 
 export function Container({
   children,
@@ -65,14 +77,14 @@ export function Logo({
             isDark ? 'text-ink' : 'text-cream'
           }`}
         >
-          Summitaa
+          {siteConfig.shortName}
         </span>
         <span
           className={`mt-[7px] flex items-center gap-2 text-[8px] font-bold uppercase leading-none tracking-[0.4em] ${
             isDark ? 'text-slate' : 'text-cream/60'
           }`}
         >
-          Roofing
+          {siteConfig.logoTagline}
           <span className="h-px w-4 bg-copper" aria-hidden="true" />
         </span>
       </span>
@@ -84,7 +96,7 @@ type ButtonVariant = 'primary' | 'secondary' | 'light' | 'outline-light'
 
 const buttonVariants: Record<ButtonVariant, string> = {
   primary:
-    'border border-copper bg-copper text-cream shadow-[0_8px_22px_-14px_rgba(13,32,43,0.65)] hover:border-copper-deep hover:bg-copper-deep',
+    'border border-copper bg-copper text-cream shadow-button hover:border-copper-deep hover:bg-copper-deep',
   secondary:
     'border border-ink/25 bg-transparent text-ink hover:border-ink hover:bg-ink hover:text-cream',
   light:
@@ -166,7 +178,7 @@ export function Photo({
             <path d="M37 28v-7h9v14" />
           </svg>
           <span className="text-[9px] font-semibold uppercase tracking-[0.32em] text-cream/60">
-            Summitaa Roofing
+            {siteConfig.name}
           </span>
         </div>
       ) : (
@@ -204,5 +216,106 @@ export function SampleTag({
       <span className="size-1 bg-copper" aria-hidden="true" />
       {children}
     </span>
+  )
+}
+
+interface DebugEvent {
+  name: string
+  eventId: string
+  timestamp: number
+  data: Record<string, unknown>
+}
+
+/**
+ * Debug panel for tracking events. Only renders when ?debug=1 is in the URL.
+ * Shows all whop.track events fired on the client.
+ */
+export function DebugPanel() {
+  const [events, setEvents] = useState<DebugEvent[]>([])
+  const [visible, setVisible] = useState(false)
+
+  useEffect(() => {
+    // Only show panel when ?debug=1 is present
+    const urlParams = new URLSearchParams(window.location.search)
+    if (urlParams.get('debug') !== '1') return
+
+    setVisible(true)
+
+    // Hook into whop.track to capture events
+    const whop = window.whop
+    const originalTrack = whop?.track
+    if (originalTrack && whop) {
+      whop.track = function (name: string, properties?: Record<string, unknown>) {
+        const event: DebugEvent = {
+          name,
+          eventId: properties?.event_id as string ?? 'unknown',
+          timestamp: Date.now(),
+          data: properties ?? {},
+        }
+        setEvents((prev) => [...prev, event])
+        // Call original
+        return originalTrack.call(whop, name, properties)
+      }
+    }
+
+    // Also capture events from the tracking library
+    const storageKey = 'summitaa.tracking.events'
+    try {
+      const stored = window.sessionStorage.getItem(storageKey)
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (Array.isArray(parsed)) {
+          setEvents((prev) => [...prev, ...parsed])
+        }
+      }
+    } catch {
+      // Ignore
+    }
+
+    return () => {
+      // Restore original
+      if (originalTrack && whop) {
+        whop.track = originalTrack
+      }
+    }
+  }, [])
+
+  if (!visible) return null
+
+  return (
+    <details
+      className="fixed bottom-4 right-4 z-[100] bg-ink/95 backdrop-blur-sm border border-copper/30 rounded-lg p-3 max-w-md max-h-[60vh] overflow-auto"
+      open
+    >
+      <summary className="flex items-center gap-2 cursor-pointer text-cream font-mono text-[11px]">
+        <span className="size-2 bg-copper" />
+        Whop Tracking Debug Panel
+        <button
+          type="button"
+          onClick={() => setEvents([])}
+          className="ml-auto text-[9px] px-2 py-0.5 border border-cream/30 rounded hover:bg-cream/10"
+        >
+          Clear
+        </button>
+      </summary>
+      <div className="mt-3 space-y-2 font-mono text-[10px] text-cream/80">
+        {events.length === 0 ? (
+          <p className="text-cream/50">No events captured yet. Interact with the page to trigger tracking.</p>
+        ) : (
+          events.slice().reverse().map((event, index) => (
+            <div
+              key={`${event.timestamp}-${index}`}
+              className="border border-copper/20 p-2 rounded bg-ink/50"
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-copper font-bold">{event.name}</span>
+                <span className="text-cream/50 text-[9px]">{new Date(event.timestamp).toLocaleTimeString()}</span>
+              </div>
+              <pre className="text-[9px] overflow-auto whitespace-pre-wrap">{JSON.stringify(event.data, null, 2)}</pre>
+            </div>
+          ))
+        )}
+      </div>
+    </details>
   )
 }

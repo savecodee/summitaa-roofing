@@ -1,17 +1,29 @@
-node_modules
-.DS_Store
-dist
-dist-ssr
-*.local
+# Dependencies
+node_modules/
+bun.lockb
+
+# Build output
+dist/
+.vite/
+
+# Environment / secrets
+.dev.vars
+.dev.vars.*
+.dev-vars-backups/
 .env
 .env.*
 !.env.example
-.dev.vars
-.dev.vars.*
-.nitro
-.tanstack
-.wrangler
-.output
-.vinxi
-__unconfig*
-todos.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
+
+# TanStack
+.tanstack/
+
+# Whop
+whop-build.zip
+.wrangler/

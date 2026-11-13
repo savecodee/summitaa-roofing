@@ -5,13 +5,14 @@ import { Header } from '../components/site/Header'
 import { Footer } from '../components/site/ContactFooter'
 import { ButtonLink, Container, Eyebrow, SampleTag } from '../components/site/primitives'
 import { Check, Info, Mail, Phone } from '../components/site/icons'
-import { siteConfig } from '../config/site'
+import { siteConfig } from '@/config'
 import { normalizeProjectRef } from '../lib/project'
 
 type ReturnSearch = {
   project?: string
   payment?: string
   status?: string
+  plan?: string
 }
 
 export const Route = createFileRoute('/deposit/return')({
@@ -19,10 +20,11 @@ export const Route = createFileRoute('/deposit/return')({
     project: typeof search.project === 'string' ? search.project : undefined,
     payment: typeof search.payment === 'string' ? search.payment : undefined,
     status: typeof search.status === 'string' ? search.status : undefined,
+    plan: typeof search.plan === 'string' ? search.plan : undefined,
   }),
   head: () => ({
     meta: [
-      { title: 'Deposit Status | Summitaa Roofing' },
+      { title: `Deposit Status | ${siteConfig.name}` },
       { name: 'robots', content: 'noindex,nofollow' },
     ],
   }),
@@ -34,6 +36,8 @@ type VerifiedStatus = {
   paid: boolean
   failed: boolean
   pending: boolean
+  planKey: string | null
+  planName: string | null
   amountLabel: string | null
   currency: string
 }
@@ -47,8 +51,9 @@ type ReturnState =
 const PAYMENT_PATTERN = /^pay_[A-Za-z0-9]{6,120}$/
 
 function DepositReturnPage() {
-  const { project, payment } = Route.useSearch()
+  const { project, payment, plan } = Route.useSearch()
   const projectRef = normalizeProjectRef(project)
+  const requestedPlan = typeof plan === 'string' ? plan : null
   const paymentId =
     typeof payment === 'string' && PAYMENT_PATTERN.test(payment) ? payment : null
   const [state, setState] = useState<ReturnState>({ kind: 'loading' })
@@ -91,6 +96,8 @@ function DepositReturnPage() {
           paid: record.paid === true,
           failed: record.failed === true,
           pending: record.pending === true,
+          planKey: typeof record.planKey === 'string' ? record.planKey : null,
+          planName: typeof record.planName === 'string' ? record.planName : null,
           amountLabel: typeof record.amountLabel === 'string' ? record.amountLabel : null,
           currency: typeof record.currency === 'string' ? record.currency.toUpperCase() : 'USD',
         }
@@ -153,6 +160,7 @@ function DepositReturnPage() {
                   payment={state.payment}
                   projectRef={projectRef ?? ''}
                   paymentId={paymentId ?? ''}
+                  requestedPlan={requestedPlan}
                 />
               ) : null}
             </div>
@@ -191,7 +199,7 @@ function StatusShell({
         : 'text-copper'
 
   return (
-    <div className={`border p-6 shadow-[0_30px_70px_-60px_rgba(8,23,32,0.5)] sm:p-8 ${toneClasses}`}>
+    <div className={`border p-6 shadow-card-tight sm:p-8 ${toneClasses}`}>
       <p className={`text-[9px] font-bold uppercase tracking-[0.24em] ${labelClasses}`}>{label}</p>
       <h2 className="mt-3 font-display text-[clamp(1.9rem,3.2vw,2.6rem)] font-medium leading-[1.08] tracking-[-0.025em] text-ink">
         {title}
@@ -256,15 +264,28 @@ function VerifiedResult({
   payment,
   projectRef,
   paymentId,
+  requestedPlan,
 }: {
   payment: VerifiedStatus
   projectRef: string
   paymentId: string
+  requestedPlan: string | null
 }) {
+  const isDepositPlan =
+    payment.planKey === 'deposit' || payment.planKey === 'legacy-deposit'
+  const retryPlan = payment.planKey ?? requestedPlan
+  const retryHref = retryPlan
+    ? `/deposit?plan=${encodeURIComponent(retryPlan)}&project=${encodeURIComponent(projectRef)}`
+    : `/deposit?project=${encodeURIComponent(projectRef)}`
+
   if (payment.paid) {
     return (
       <>
-        <StatusShell tone="success" label="Verified by Whop" title="Deposit received.">
+        <StatusShell
+          tone="success"
+          label="Verified by Whop"
+          title={isDepositPlan ? 'Deposit received.' : 'Payment received.'}
+        >
           <div className="flex items-start gap-3">
             <span className="mt-0.5 grid size-8 shrink-0 place-items-center border border-[#2f7d5b]/35 text-[#2f7d5b]">
               <Check className="size-4" />
@@ -281,14 +302,21 @@ function VerifiedResult({
                 . Keep this page or your payment reference for your records.
               </p>
               <p className="mt-3">
-                The deposit is applied to the project total only as stated in your written
-                agreement. This page does not replace a receipt from Whop or a signed contract.
+                {isDepositPlan
+                  ? 'The deposit is applied to the project total only as stated in your written agreement. This page does not replace a receipt from Whop or a signed contract.'
+                  : 'The plan is confirmed in the processor record. This page does not replace a receipt from Whop or the written scope for the work.'}
               </p>
             </div>
           </div>
           <dl className="mt-5 space-y-2 border-t border-[#2f7d5b]/20 pt-4 text-[11.5px]">
+            {payment.planName ? (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <dt className="text-slate">Plan</dt>
+                <dd className="font-semibold text-ink">{payment.planName}</dd>
+              </div>
+            ) : null}
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <dt className="text-slate">Project reference</dt>
+              <dt className="text-slate">Reference</dt>
               <dd className="font-semibold text-ink">{projectRef}</dd>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -305,9 +333,11 @@ function VerifiedResult({
           <ButtonLink href="/" className="w-full sm:w-auto">
             Back to the homepage
           </ButtonLink>
-          <ButtonLink href="/deposit/save-card" variant="secondary" className="w-full sm:w-auto">
-            Save a card for the final balance
-          </ButtonLink>
+          {isDepositPlan ? (
+            <ButtonLink href="/deposit/save-card" variant="secondary" className="w-full sm:w-auto">
+              Save a card for the final balance
+            </ButtonLink>
+          ) : null}
         </div>
       </>
     )
@@ -316,21 +346,25 @@ function VerifiedResult({
   if (payment.failed) {
     return (
       <>
-        <StatusShell tone="error" label="Payment not completed" title="The deposit was not paid.">
+        <StatusShell
+          tone="error"
+          label="Payment not completed"
+          title="The payment was not completed."
+        >
           <p>
             Whop reports this payment as <span className="font-semibold text-ink">{payment.status}</span>.
             No completion is being claimed. If your bank shows a charge, contact the office with
             the payment reference before trying again.
           </p>
           <p className="mt-3">
-            Project reference: <span className="font-semibold text-ink">{projectRef}</span>
+            Reference: <span className="font-semibold text-ink">{projectRef}</span>
             <br />
             Payment reference: <span className="font-mono text-[11px]">{paymentId}</span>
           </p>
         </StatusShell>
         <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-          <ButtonLink href={`/deposit?project=${encodeURIComponent(projectRef)}`} className="w-full sm:w-auto">
-            Return to the deposit page
+          <ButtonLink href={retryHref} className="w-full sm:w-auto">
+            Return to checkout
           </ButtonLink>
         </div>
         <ContactBlock />

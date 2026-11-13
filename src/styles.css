@@ -33,23 +33,36 @@
     U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
-@theme {
+/*
+ * The color and shadow tokens resolve to `--brand-*` variables emitted from
+ * `brandColors` in `src/config/site.ts` (injected by `__root.tsx`). Changing
+ * the palette there repaints every utility without editing this file.
+ */
+@theme inline {
   --font-sans: "Manrope", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-display: "Fraunces", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
 
-  --color-ink: #0d202b;
-  --color-ink-deep: #081720;
-  --color-ink-soft: #173442;
-  --color-cream: #f7f2e9;
-  --color-cream-deep: #eee6d9;
-  --color-paper: #fcfaf5;
-  --color-slate: #50616a;
-  --color-slate-light: #7b898f;
-  --color-copper: #a85a30;
-  --color-copper-deep: #8b4724;
-  --color-copper-light: #d9a27d;
-  --color-line: #ddd4c6;
-  --color-error: #9f3527;
+  --color-ink: var(--brand-ink);
+  --color-ink-deep: var(--brand-ink-deep);
+  --color-ink-soft: var(--brand-ink-soft);
+  --color-cream: var(--brand-cream);
+  --color-cream-deep: var(--brand-cream-deep);
+  --color-paper: var(--brand-paper);
+  --color-slate: var(--brand-slate);
+  --color-slate-light: var(--brand-slate-light);
+  --color-copper: var(--brand-copper);
+  --color-copper-deep: var(--brand-copper-deep);
+  --color-copper-light: var(--brand-copper-light);
+  --color-line: var(--brand-line);
+  --color-error: var(--brand-error);
+
+  --shadow-card: 0 30px 70px -54px rgb(var(--brand-ink-deep-rgb) / 0.55);
+  --shadow-card-tight: 0 30px 70px -60px rgb(var(--brand-ink-deep-rgb) / 0.5);
+  --shadow-card-soft: 0 24px 60px -48px rgb(var(--brand-ink-deep-rgb) / 0.5);
+  --shadow-hero: 0 18px 40px -22px rgb(var(--brand-ink-deep-rgb) / 0.9);
+  --shadow-menu: 0 24px 60px -20px rgb(var(--brand-ink-deep-rgb) / 0.35);
+  --shadow-button: 0 8px 22px -14px rgb(var(--brand-ink-rgb) / 0.65);
+  --shadow-service: 0 24px 50px -36px rgb(var(--brand-ink-deep-rgb) / 0.55);
 }
 
 @layer base {
@@ -73,20 +86,20 @@
   body {
     margin: 0;
     overflow-x: clip;
-    background-color: var(--color-cream);
-    color: var(--color-ink);
+    background-color: var(--brand-cream);
+    color: var(--brand-ink);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
 
   ::selection {
-    background-color: var(--color-copper);
-    color: var(--color-cream);
+    background-color: var(--brand-copper);
+    color: var(--brand-cream);
   }
 
   :focus-visible {
-    outline: 2px solid var(--color-copper);
+    outline: 2px solid var(--brand-copper);
     outline-offset: 3px;
   }
 
@@ -113,8 +126,8 @@
 @layer utilities {
   .blueprint-grid {
     background-image:
-      linear-gradient(to right, rgb(13 32 43 / 0.045) 1px, transparent 1px),
-      linear-gradient(to bottom, rgb(13 32 43 / 0.045) 1px, transparent 1px);
+      linear-gradient(to right, rgb(var(--brand-ink-rgb) / 0.045) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(var(--brand-ink-rgb) / 0.045) 1px, transparent 1px);
     background-size: 76px 76px;
     -webkit-mask-image: radial-gradient(ellipse 78% 82% at 28% 22%, black 25%, transparent 78%);
     mask-image: radial-gradient(ellipse 78% 82% at 28% 22%, black 25%, transparent 78%);
@@ -123,15 +136,15 @@
   .roof-shingle-lines {
     background-image: repeating-linear-gradient(
       115deg,
-      rgb(247 242 233 / 0.06) 0px,
-      rgb(247 242 233 / 0.06) 1px,
+      rgb(var(--brand-cream-rgb) / 0.06) 0px,
+      rgb(var(--brand-cream-rgb) / 0.06) 1px,
       transparent 1px,
       transparent 14px
     );
   }
 
   .text-outline-light {
-    -webkit-text-stroke: 1px rgb(247 242 233 / 0.12);
+    -webkit-text-stroke: 1px rgb(var(--brand-cream-rgb) / 0.12);
     color: transparent;
   }
 

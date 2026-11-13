@@ -89,6 +89,7 @@ describe('legacy invoice response mapping', () => {
       id: 'inv_abc123',
       status: 'draft',
       url: 'https://whop.com/invoice/inv_abc123',
+      charged: false,
     })
   })
 
@@ -105,6 +106,7 @@ describe('legacy invoice response mapping', () => {
       id: 'inv_nested',
       status: 'draft',
       url: 'https://whop.com/invoice/inv_nested',
+      charged: false,
     })
   })
 
@@ -118,6 +120,7 @@ describe('legacy invoice response mapping', () => {
         id: 'inv_1',
         status: 'draft',
         url: value,
+        charged: false,
       })
     }
   })
@@ -140,6 +143,7 @@ describe('legacy invoice response mapping', () => {
       id: 'inv_1',
       status: 'draft',
       url: null,
+      charged: false,
     })
     expect(
       readCreatedInvoice({
@@ -151,11 +155,12 @@ describe('legacy invoice response mapping', () => {
         url: '',
       }).url,
     ).toBeNull()
-    expect(readCreatedInvoice(null)).toEqual({ id: null, status: null, url: null })
+    expect(readCreatedInvoice(null)).toEqual({ id: null, status: null, url: null, charged: false })
     expect(readCreatedInvoice('not-an-object')).toEqual({
       id: null,
       status: null,
       url: null,
+      charged: false,
     })
   })
 
@@ -171,25 +176,27 @@ describe('legacy invoice response mapping', () => {
       id: 'inv_top',
       status: 'draft',
       url: 'https://whop.com/top',
+      charged: false,
     })
   })
 })
 
 describe('final invoice creation request', () => {
-  test('uses the legacy dated API, a draft-only payload, and the official link field', async () => {
+  test('uses the legacy dated API, a real invoice (not draft), and the official link field', async () => {
     respond = () =>
       jsonResponse({
         id: 'inv_abc123',
-        status: 'draft',
+        status: 'open',
         pay_online_url: 'https://whop.com/invoice/inv_abc123',
       })
 
-    const created = await createFinalInvoice(draft)
+    const created = await createFinalInvoice({ draft })
 
     expect(created).toEqual({
       id: 'inv_abc123',
-      status: 'draft',
+      status: 'open',
       url: 'https://whop.com/invoice/inv_abc123',
+      charged: false,
     })
     expect(requests).toHaveLength(1)
 
@@ -204,7 +211,7 @@ describe('final invoice creation request', () => {
       account_id: ACCOUNT_ID,
       product_id: PRODUCT_ID,
       collection_method: 'send_invoice',
-      save_as_draft: true,
+      save_as_draft: false,
       customer_name: 'Jordan Miller',
       email_address: 'jordan@example.com',
       due_date: '2026-11-11T12:00:00.000Z',
@@ -227,12 +234,12 @@ describe('final invoice creation request', () => {
     respond = () =>
       jsonResponse({
         id: 'inv_replayed',
-        status: 'draft',
+        status: 'open',
         pay_online_url: 'https://whop.com/invoice/inv_replayed',
       })
 
-    await createFinalInvoice(draft)
-    await createFinalInvoice(draft)
+    await createFinalInvoice({ draft })
+    await createFinalInvoice({ draft })
 
     expect(requests).toHaveLength(2)
     expect(requests[0].headers['idempotency-key']).toBe(draft.idempotencyKey)
@@ -243,11 +250,13 @@ describe('final invoice creation request', () => {
   })
 
   test('a changed operation uses a different idempotency key', async () => {
-    await createFinalInvoice(draft)
+    await createFinalInvoice({ draft })
     await createFinalInvoice({
-      ...draft,
-      depositPaymentId: 'pay_0987654321',
-      idempotencyKey: 'invoice-SUM-1042-149900-50000-pay_0987654321',
+      draft: {
+        ...draft,
+        depositPaymentId: 'pay_0987654321',
+        idempotencyKey: 'invoice-SUM-1042-149900-50000-pay_0987654321',
+      },
     })
 
     expect(requests[0].headers['idempotency-key']).not.toBe(
@@ -256,12 +265,13 @@ describe('final invoice creation request', () => {
   })
 
   test('a created invoice with no link still returns its id and status', async () => {
-    respond = () => jsonResponse({ id: 'inv_no_link', status: 'draft' })
+    respond = () => jsonResponse({ id: 'inv_no_link', status: 'open' })
 
-    await expect(createFinalInvoice(draft)).resolves.toEqual({
+    await expect(createFinalInvoice({ draft })).resolves.toEqual({
       id: 'inv_no_link',
-      status: 'draft',
+      status: 'open',
       url: null,
+      charged: false,
     })
   })
 
@@ -272,7 +282,7 @@ describe('final invoice creation request', () => {
         422,
       )
 
-    await expect(createFinalInvoice(draft)).rejects.toMatchObject({
+    await expect(createFinalInvoice({ draft })).rejects.toMatchObject({
       name: 'WhopApiError',
       status: 422,
     })
@@ -287,7 +297,7 @@ describe('final invoice creation request', () => {
 
     let caught = null
     try {
-      await createFinalInvoice(draft)
+      await createFinalInvoice({ draft })
     } catch (error) {
       caught = error
     }
@@ -301,6 +311,6 @@ describe('final invoice creation request', () => {
       throw new Error('network down')
     }
 
-    await expect(createFinalInvoice(draft)).rejects.toBeInstanceOf(WhopTransportError)
+    await expect(createFinalInvoice({ draft })).rejects.toBeInstanceOf(WhopTransportError)
   })
 })

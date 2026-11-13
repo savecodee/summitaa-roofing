@@ -16,7 +16,11 @@ import {
 } from '../../server/whop/client'
 import { createWhopEvent } from '../../server/whop/events'
 import { createWhopLead } from '../../server/whop/leads'
+import { sendEstimateConfirmation } from '../../server/whop/email'
 import { readWhopIdentity } from '../../server/whop/oauth'
+import { checkRateLimit, clientAddress } from '../../server/rate-limit'
+
+const LEAD_RATE_LIMIT = { limit: 5, windowMs: 10 * 60 * 1000 } as const
 
 export const Route = createFileRoute('/api/leads')({
   server: {
@@ -88,21 +92,28 @@ export const Route = createFileRoute('/api/leads')({
           )
         }
 
-        // The Leads API requires a real Whop user. A visitor proves their
-        // identity through Whop OAuth before a lead is created; no shared or
-        // fabricated user id is ever used.
-        const identity = await readWhopIdentity(request)
-        if (!identity) {
+        const rate = checkRateLimit(
+          `leads:${clientAddress(request)}`,
+          LEAD_RATE_LIMIT,
+        )
+        if (!rate.allowed) {
           return jsonResponse(
             {
               ok: false,
-              code: 'sign_in_required',
+              code: 'rate_limited',
               message:
-                'Verify with Whop to send this request. Whop sign-in confirms the lead belongs to you.',
+                'Too many estimate requests from this connection. Please wait a few minutes and try again, or call the office.',
             },
-            { status: 401 },
+            {
+              status: 429,
+              headers: { 'retry-after': String(rate.retryAfterSeconds) },
+            },
           )
         }
+
+        // Whop only requires `account_id`. A signed-in visitor's user id is
+        // linked when available; an anonymous visitor sends no user_id at all.
+        const identity = await readWhopIdentity(request)
 
         const referrer = new URL(
           submission.sourcePath,
@@ -112,7 +123,7 @@ export const Route = createFileRoute('/api/leads')({
         try {
           const lead = await createWhopLead({
             requestId: submission.requestId,
-            userId: identity.userId,
+            userId: identity?.userId,
             metadata: buildLeadMetadata(submission.values, submission.requestId),
             referrer,
           })
@@ -131,11 +142,26 @@ export const Route = createFileRoute('/api/leads')({
             tracked = false
           }
 
+          let emailSent = false
+          try {
+            emailSent = await sendEstimateConfirmation({
+              to: submission.values.email,
+              customerName: submission.values.name,
+              requestId: submission.requestId,
+              service: submission.values.service,
+              zip: submission.values.zip,
+              details: submission.values.details,
+            })
+          } catch {
+            emailSent = false
+          }
+
           return jsonResponse({
             ok: true,
             requestId: submission.requestId,
             leadId: lead.id,
             tracked,
+            emailSent,
           })
         } catch (error) {
           if (error instanceof WhopNotConfiguredError) {

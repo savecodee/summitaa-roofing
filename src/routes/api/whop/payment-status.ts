@@ -1,5 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 
+import { whopPublicConfig } from '../../../config/whop'
+import { resolvePaymentPlan } from '../../../lib/checkout-plans'
 import { depositAmountMatches, formatCents } from '../../../lib/deposit'
 import { normalizeProjectRef } from '../../../lib/project'
 import { jsonResponse } from '../../../server/http'
@@ -46,17 +48,6 @@ export const Route = createFileRoute('/api/whop/payment-status')({
           )
         }
 
-        if (!config.depositAmountCents) {
-          return jsonResponse(
-            {
-              ok: false,
-              code: 'not_configured',
-              message: 'Payment status cannot be checked right now.',
-            },
-            { status: 503 },
-          )
-        }
-
         try {
           const payment = await getDepositPayment(paymentId)
 
@@ -67,19 +58,47 @@ export const Route = createFileRoute('/api/whop/payment-status')({
             )
           }
 
+          if (payment.accountId && payment.accountId !== whopPublicConfig.accountId) {
+            return jsonResponse(
+              { ok: false, code: 'not_found', message: 'Payment reference was not found.' },
+              { status: 404 },
+            )
+          }
+
+          // The plan comes from the authoritative payment lookup, never from
+          // the browser. A payment for any other plan is not accepted.
+          const resolvedPlan = resolvePaymentPlan({
+            planId: payment.planId,
+            envPlanId: config.depositPlanId,
+            envAmountCents: config.depositAmountCents,
+            envCurrency: config.depositCurrency,
+          })
+
+          if (!resolvedPlan) {
+            return jsonResponse(
+              {
+                ok: false,
+                code: 'unsupported_plan',
+                message:
+                  'This payment does not match an available plan. Contact the office before treating it as paid.',
+              },
+              { status: 409 },
+            )
+          }
+
           const amountCents =
             payment.amountMajor && /^\d+(\.\d+)?$/.test(payment.amountMajor)
               ? Math.round(Number(payment.amountMajor) * 100)
               : null
 
           // Whop charges the plan. If the processor total does not match the
-          // configured deposit, never report a successful deposit.
+          // resolved plan, never report a successful payment.
           if (
             !depositAmountMatches({
               actualCents: amountCents,
               actualCurrency: payment.currency,
-              expectedCents: config.depositAmountCents,
-              expectedCurrency: config.depositCurrency,
+              expectedCents: resolvedPlan.amountCents,
+              expectedCurrency: resolvedPlan.currency,
             })
           ) {
             return jsonResponse(
@@ -87,7 +106,7 @@ export const Route = createFileRoute('/api/whop/payment-status')({
                 ok: false,
                 code: 'amount_mismatch',
                 message:
-                  'The payment amount does not match the configured deposit. Contact the office before treating this as paid.',
+                  'The payment amount does not match the selected plan. Contact the office before treating it as paid.',
               },
               { status: 409 },
             )
@@ -99,11 +118,13 @@ export const Route = createFileRoute('/api/whop/payment-status')({
             paid: payment.paid,
             failed: payment.failed,
             pending: payment.pending,
+            planKey: resolvedPlan.planKey,
+            planName: resolvedPlan.planName,
             amountLabel:
               amountCents !== null
-                ? formatCents(amountCents, payment.currency ?? config.depositCurrency)
+                ? formatCents(amountCents, payment.currency ?? resolvedPlan.currency)
                 : null,
-            currency: payment.currency ?? config.depositCurrency,
+            currency: payment.currency ?? resolvedPlan.currency,
           })
         } catch (error) {
           if (error instanceof WhopNotConfiguredError) {

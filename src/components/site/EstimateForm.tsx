@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { serviceOptions, siteConfig, type ServiceValue } from '../../config/site'
+import { copy, serviceOptions, siteConfig, type ServiceValue } from '@/config'
 import {
   ESTIMATE_FIELD_LABELS,
   ESTIMATE_LIMITS,
@@ -17,6 +17,7 @@ const initialValues: EstimateValues = {
   name: '',
   email: '',
   phone: '',
+  address: '',
   zip: '',
   service: '',
   details: '',
@@ -33,33 +34,11 @@ function fieldClass(hasError: boolean) {
 
 type ConnectionState = 'checking' | 'ready' | 'unavailable' | 'unknown'
 
-type AuthState = 'checking' | 'signed-out' | 'signed-in'
-
 type SubmitState =
   | { kind: 'idle' }
   | { kind: 'submitting' }
   | { kind: 'success'; requestId: string }
   | { kind: 'error'; message: string }
-
-const ESTIMATE_DRAFT_KEY = 'summitaa.estimate.draft'
-
-const nextSteps = [
-  {
-    number: '01',
-    title: 'We review your request.',
-    detail: 'Your ZIP code and project notes help us understand the property and the service you need.',
-  },
-  {
-    number: '02',
-    title: 'We confirm coverage and availability.',
-    detail: 'If the property is within the service area, the next step is arranging an inspection.',
-  },
-  {
-    number: '03',
-    title: 'You receive a written scope.',
-    detail: 'After the inspection, findings and recommended next steps are put in writing for review.',
-  },
-] as const
 
 function connectionBadge(connection: ConnectionState) {
   switch (connection) {
@@ -90,26 +69,25 @@ export function EstimateSection({
       <div className="blueprint-grid pointer-events-none absolute inset-0 opacity-70" aria-hidden="true" />
       <Container className="relative py-20 sm:py-24 lg:py-28">
         <div className="max-w-[720px]">
-          <Eyebrow>Request an estimate</Eyebrow>
+          <Eyebrow>{copy.estimate.eyebrow}</Eyebrow>
           <h2
             id="estimate-heading"
             className="mt-5 font-display text-[clamp(2.5rem,4.7vw,4.3rem)] font-medium leading-[1.02] tracking-[-0.035em] text-ink balance"
           >
-            Tell us what&apos;s happening up there.
+            {copy.estimate.title}
           </h2>
           <p className="mt-6 max-w-[580px] text-[14.5px] leading-[1.85] text-slate pretty">
-            A few details help us understand the property and the service you need. Send a request
-            and the office will follow up to confirm coverage and the next step.
+            {copy.estimate.intro}
           </p>
         </div>
 
         <div className="mt-11 grid gap-8 lg:mt-14 lg:grid-cols-[0.72fr_1.28fr] lg:gap-12">
-          <aside aria-label="What happens next" className="flex flex-col">
+          <aside aria-label={copy.estimate.nextLabel} className="flex flex-col">
             <p className="text-[9px] font-bold uppercase tracking-[0.24em] text-slate">
-              What happens next
+              {copy.estimate.nextLabel}
             </p>
             <ol className="mt-5 border-t border-line">
-              {nextSteps.map((step) => (
+              {copy.estimate.nextSteps.map((step) => (
                 <li key={step.number} className="flex gap-4 border-b border-line py-5">
                   <span className="font-display text-[16px] leading-none text-copper">
                     {step.number}
@@ -186,8 +164,6 @@ function EstimateForm({
   const [touched, setTouched] = useState<Partial<Record<keyof EstimateValues, boolean>>>({})
   const [attemptedSubmit, setAttemptedSubmit] = useState(false)
   const [connection, setConnection] = useState<ConnectionState>('checking')
-  const [auth, setAuth] = useState<AuthState>('checking')
-  const [authName, setAuthName] = useState<string | null>(null)
   const [submitState, setSubmitState] = useState<SubmitState>({ kind: 'idle' })
   const [company, setCompany] = useState('')
 
@@ -227,66 +203,6 @@ function EstimateForm({
 
     return () => controller.abort()
   }, [])
-
-  useEffect(() => {
-    const controller = new AbortController()
-
-    fetch('/api/auth/whop/session', {
-      headers: { accept: 'application/json' },
-      signal: controller.signal,
-    })
-      .then(async (response) => {
-        if (!response.ok) throw new Error('auth_unavailable')
-        const body: unknown = await response.json().catch(() => null)
-        if (typeof body !== 'object' || body === null) throw new Error('auth_invalid')
-        const record = body as Record<string, unknown>
-        if (record.signedIn === true) {
-          setAuth('signed-in')
-          setAuthName(typeof record.name === 'string' ? record.name : null)
-        } else {
-          setAuth('signed-out')
-        }
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) setAuth('signed-out')
-      })
-
-    try {
-      const raw = sessionStorage.getItem(ESTIMATE_DRAFT_KEY)
-      if (raw) {
-        sessionStorage.removeItem(ESTIMATE_DRAFT_KEY)
-        const draft: unknown = JSON.parse(raw)
-        if (typeof draft === 'object' && draft !== null) {
-          const saved = draft as Record<string, unknown>
-          const text = (key: keyof EstimateValues) =>
-            typeof saved[key] === 'string' ? (saved[key] as string) : ''
-          setValues({
-            name: text('name').slice(0, ESTIMATE_LIMITS.name),
-            email: text('email').slice(0, ESTIMATE_LIMITS.email),
-            phone: text('phone').slice(0, 40),
-            zip: text('zip').slice(0, ESTIMATE_LIMITS.zip),
-            service: text('service') as ServiceValue,
-            details: text('details').slice(0, ESTIMATE_LIMITS.details),
-          })
-        }
-      }
-    } catch {
-      // A blocked sessionStorage simply means the draft is not restored.
-    }
-
-    return () => controller.abort()
-  }, [])
-
-  const startWhopSignIn = () => {
-    try {
-      sessionStorage.setItem(ESTIMATE_DRAFT_KEY, JSON.stringify(values))
-    } catch {
-      // The visitor can re-enter the details if storage is blocked.
-    }
-    window.location.assign(
-      `/api/auth/whop/start?returnTo=${encodeURIComponent('/#estimate')}`,
-    )
-  }
 
   useEffect(() => {
     if (!preselectedService) return
@@ -370,16 +286,6 @@ function EstimateForm({
     const requestId = requestIdRef.current ?? makeEstimateRequestId()
     requestIdRef.current = requestId
 
-    // The custom pixel event fires at submission time. If Whop sign-in is
-    // still required, the visitor is sent through OAuth first and the draft is
-    // restored on return.
-    trackEstimateRequested(requestId)
-
-    if (auth !== 'signed-in') {
-      startWhopSignIn()
-      return
-    }
-
     setSubmitState({ kind: 'submitting' })
 
     try {
@@ -399,15 +305,12 @@ function EstimateForm({
       const record =
         typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : null
 
-      if (response.status === 401 && record?.code === 'sign_in_required') {
-        setAuth('signed-out')
-        startWhopSignIn()
-        return
-      }
-
       if (response.ok && record?.ok === true) {
         const returnedId =
           typeof record.requestId === 'string' ? record.requestId : requestId
+        // The event fires only after the server confirms the lead was recorded.
+        // Its event id matches the server-side event, so Whop deduplicates it.
+        trackEstimateRequested(returnedId)
         setSubmitState({ kind: 'success', requestId: returnedId })
         window.requestAnimationFrame(() => successRef.current?.focus())
         return
@@ -447,7 +350,7 @@ function EstimateForm({
   const submitDisabled = isSubmitting || connection === 'unavailable'
 
   return (
-    <div className="relative border border-ink/12 bg-paper p-5 shadow-[0_30px_70px_-54px_rgba(8,23,32,0.55)] sm:p-8 lg:p-10">
+    <div className="relative border border-ink/12 bg-paper p-5 shadow-card sm:p-8 lg:p-10">
       <span className="absolute inset-x-0 top-0 h-0.5 bg-copper" aria-hidden="true" />
 
       <div className="flex flex-wrap items-start justify-between gap-4 border-b border-line pb-6">
@@ -498,32 +401,11 @@ function EstimateForm({
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-3 border border-ink/12 bg-cream px-3.5 py-3">
-        {auth === 'signed-in' ? (
-          <>
-            <span className="size-1.5 shrink-0 bg-[#2f7d5b]" aria-hidden="true" />
-            <p className="text-[10.5px] leading-[1.6] text-slate">
-              <strong className="font-bold text-ink">Verified with Whop</strong>
-              {authName ? ` as ${authName}` : ''}. This request will be recorded as your lead.
-            </p>
-          </>
-        ) : auth === 'signed-out' ? (
-          <>
-            <span className="size-1.5 shrink-0 bg-copper" aria-hidden="true" />
-            <p className="min-w-[180px] flex-1 text-[10.5px] leading-[1.6] text-slate">
-              <strong className="font-bold text-ink">Whop verification required.</strong> Whop
-              sign-in confirms the lead is yours before it is recorded.
-            </p>
-            <button
-              type="button"
-              onClick={startWhopSignIn}
-              className="text-[10px] font-bold uppercase tracking-[0.14em] text-copper underline decoration-copper/40 underline-offset-4 transition-colors hover:text-copper-deep"
-            >
-              Sign in with Whop
-            </button>
-          </>
-        ) : (
-          <p className="text-[10.5px] text-slate">Checking Whop sign-in…</p>
-        )}
+        <span className="size-1.5 shrink-0 bg-[#2f7d5b]" aria-hidden="true" />
+        <p className="text-[10.5px] leading-[1.6] text-slate">
+          <strong className="font-bold text-ink">No account needed.</strong> Send your request
+          directly — we use these details only to respond to your estimate inquiry.
+        </p>
       </div>
 
       <form
@@ -678,6 +560,30 @@ function EstimateForm({
           </div>
 
           <div className="sm:col-span-2">
+            <label htmlFor="estimate-address" className="flex items-baseline gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-ink">
+              Property address{' '}
+              <span className="text-[9px] font-medium normal-case tracking-normal text-slate">
+                Optional
+              </span>
+            </label>
+            <input
+              id="estimate-address"
+              name="address"
+              type="text"
+              autoComplete="street-address"
+              maxLength={ESTIMATE_LIMITS.address}
+              placeholder="123 Main Street"
+              value={values.address}
+              onChange={(event) => updateField('address', event.target.value)}
+              onBlur={() => handleBlur('address')}
+              className={`mt-2 ${fieldClass(false)}`}
+            />
+            <p className="mt-2 text-[10.5px] text-slate">
+              The street address helps us confirm the property. ZIP code is still required.
+            </p>
+          </div>
+
+          <div className="sm:col-span-2">
             <label htmlFor="estimate-service" className="flex items-baseline gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-ink">
               Service needed <span className="text-copper" aria-hidden="true">*</span>
             </label>
@@ -794,13 +700,7 @@ function EstimateForm({
               aria-disabled={submitDisabled}
               className="group mt-7 inline-flex min-h-12 w-full items-center justify-center gap-2.5 rounded-[2px] border border-copper bg-copper px-6 py-3.5 text-sm font-semibold text-cream transition-colors duration-200 hover:border-copper-deep hover:bg-copper-deep disabled:cursor-not-allowed disabled:border-ink/20 disabled:bg-ink/20 disabled:text-cream"
             >
-              {isSubmitting
-                ? 'Sending request…'
-                : auth === 'signed-in'
-                  ? 'Send Estimate Request'
-                  : auth === 'checking'
-                    ? 'Checking Whop sign-in…'
-                    : 'Verify with Whop & Send'}
+              {isSubmitting ? 'Sending request…' : 'Send Estimate Request'}
               <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" />
             </button>
             <p className="mt-3 text-center text-[10.5px] leading-relaxed text-slate">

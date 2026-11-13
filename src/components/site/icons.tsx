@@ -165,6 +165,14 @@ export function ClipboardCheck({ className = 'size-4', ...props }: IconProps) {
   )
 }
 
+export function Loader2({ className = 'size-4', ...props }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} {...iconDefaults} {...props}>
+      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+    </svg>
+  )
+}
+
 export function RoofPattern({ className = 'size-full', ...props }: IconProps) {
   return (
     <svg viewBox="0 0 400 300" className={className} {...iconDefaults} {...props} aria-hidden="true">
@@ -173,6 +181,18 @@ export function RoofPattern({ className = 'size-full', ...props }: IconProps) {
       <path d="M-20 318 200 140l220 178" strokeWidth="1.2" opacity="0.2" />
       <path d="M200 60v230" strokeWidth="1" opacity="0.3" />
       <path d="M92 151v159M308 151v159" strokeWidth="1" opacity="0.2" />
+    </svg>
+  )
+}
+
+export function Star({ className = 'size-4', fill, stroke, ...props }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} {...iconDefaults} {...props}>
+      <path
+        d="M12 2l1.7 6.3h6.8l-5.5 4.7 2.1 6.8L12 18.3l-7.3 3.8 2.1-6.8-5.5-4.7h6.8L12 2z"
+        fill={fill ?? 'none'}
+        stroke={stroke ?? 'currentColor'}
+      />
     </svg>
   )
 }

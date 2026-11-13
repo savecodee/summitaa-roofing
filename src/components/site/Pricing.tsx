@@ -1,10 +1,20 @@
-import { pricingPlans, type ServiceValue } from '../../config/site'
+import { copy, pricingPlans, type ServiceValue } from '@/config'
+import type { CheckoutPlanKey } from '../../lib/checkout-plans'
+import { customerPlanHref } from '../../lib/customer'
 import { Check, Info } from './icons'
 import { ButtonLink, Container, Eyebrow, SampleTag } from './primitives'
 
 export function Pricing({
+  email,
+  selectedPlanKey,
+  projectRef,
+  onSelectPlan,
   onRequestService,
 }: {
+  email: string
+  selectedPlanKey: CheckoutPlanKey | null
+  projectRef: string | null
+  onSelectPlan: (planKey: CheckoutPlanKey) => void
   onRequestService: (service: ServiceValue) => void
 }) {
   return (
@@ -16,26 +26,42 @@ export function Pricing({
       <Container className="relative py-20 sm:py-24 lg:py-28">
         <div className="grid gap-8 lg:grid-cols-[1fr_0.65fr] lg:items-end lg:gap-16">
           <div>
-            <Eyebrow tone="light">Pricing</Eyebrow>
+            <Eyebrow tone="light">{copy.pricing.eyebrow}</Eyebrow>
             <h2
               id="pricing-heading"
               className="mt-5 max-w-[690px] font-display text-[clamp(2.5rem,4.6vw,4.3rem)] font-medium leading-[1.02] tracking-[-0.035em] text-cream balance"
             >
-              Example pricing, clearly explained.
+              {copy.pricing.title}
             </h2>
           </div>
           <div className="lg:justify-self-end">
-            <SampleTag tone="dark">Sample pricing — not an offer</SampleTag>
+            <SampleTag tone="dark">{copy.pricing.sampleTag}</SampleTag>
             <p className="mt-4 max-w-sm text-[12px] leading-[1.75] text-cream/55">
-              These figures are configurable examples for this website preview. Your project price
-              is only set after an inspection and a signed written agreement.
+              {copy.pricing.sampleNote}
             </p>
+            {!email ? (
+              <p className="mt-4 max-w-sm border border-cream/20 bg-cream/[0.04] px-3 py-2.5 text-[11px] leading-[1.65] text-cream/75">
+                Save your email above to continue to secure checkout. All three plans stay visible
+                and selectable.
+              </p>
+            ) : (
+              <p className="mt-4 max-w-sm border border-cream/20 bg-cream/[0.04] px-3 py-2.5 text-[11px] leading-[1.65] text-cream/75">
+                Your email is saved for this visit. Choose a plan to continue to Whop checkout —
+                no account or password needed.
+              </p>
+            )}
           </div>
         </div>
 
         <div className="mt-11 grid gap-4 lg:grid-cols-3 lg:mt-14 lg:gap-5">
           {pricingPlans.map((plan) => {
             const isFeatured = plan.featured
+            const isSelected = selectedPlanKey === plan.key
+            const checkoutHref = email
+              ? projectRef
+                ? customerPlanHref(plan.key, projectRef)
+                : `/deposit?plan=${encodeURIComponent(plan.key)}`
+              : '#start'
 
             return (
               <article
@@ -44,7 +70,7 @@ export function Pricing({
                   isFeatured
                     ? 'border-copper bg-copper-deep text-cream'
                     : 'border-cream/15 bg-paper text-ink'
-                }`}
+                } ${isSelected ? 'ring-2 ring-cream ring-offset-2 ring-offset-ink' : ''}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <span
@@ -61,7 +87,7 @@ export function Pricing({
                         : 'border-ink/15 text-slate'
                     }`}
                   >
-                    {plan.badge}
+                    {isSelected ? 'Selected' : plan.badge}
                   </span>
                 </div>
 
@@ -125,33 +151,53 @@ export function Pricing({
 
                 <div className="mt-auto pt-8">
                   <ButtonLink
-                    href="#estimate"
-                    onClick={() => onRequestService(plan.service)}
+                    href={checkoutHref}
+                    onClick={() => onSelectPlan(plan.key)}
                     variant={isFeatured ? 'light' : 'secondary'}
                     className="w-full"
-                    aria-label={`${plan.cta} — go to the estimate request form`}
+                    aria-label={
+                      email
+                        ? `Continue to secure checkout for ${plan.name}`
+                        : `Enter your email to choose ${plan.name}`
+                    }
                   >
-                    {plan.cta}
+                    {email ? 'Continue to secure checkout' : 'Enter email to continue'}
                   </ButtonLink>
+                  <a
+                    href="#estimate"
+                    onClick={() => onRequestService(plan.service)}
+                    className={`mt-4 block text-center text-[10.5px] font-semibold uppercase tracking-[0.14em] underline decoration-1 underline-offset-4 transition-colors ${
+                      isFeatured
+                        ? 'text-cream/70 hover:text-cream'
+                        : 'text-slate hover:text-ink'
+                    }`}
+                  >
+                    Ask about this plan
+                  </a>
                 </div>
               </article>
             )
           })}
         </div>
 
+        <div className="mt-6 flex flex-col items-center gap-3 border-t border-cream/15 pt-6 sm:flex-row sm:justify-between">
+          <p className="text-[11px] text-cream/65">
+            Sandbox / test payment (no real money): pay with a Whop test Visa card.
+          </p>
+          <ButtonLink href="/sandbox/deposit?plan=inspection" variant="light" className="w-full sm:w-auto">
+            Test payment (Visa)
+          </ButtonLink>
+        </div>
+
         <div className="mt-8 grid gap-5 border-t border-cream/15 pt-6 lg:grid-cols-[1.35fr_0.65fr] lg:gap-12">
           <div className="flex gap-3">
             <Info className="mt-0.5 size-4 shrink-0 text-copper-light" />
             <p className="max-w-[780px] text-[11px] leading-[1.8] text-cream/65">
-              All prices on this page are configurable examples, not a quote or an offer. Actual
-              project pricing depends on an on-site inspection, the scope of work, roof access,
-              materials, and a signed written agreement. The deposit example would apply only after
-              you approve a written proposal, and the deposit and cancellation terms must be defined
-              in that agreement.
+              {copy.pricing.disclaimer}
             </p>
           </div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-cream/65 lg:text-right">
-            Deposits are paid on the secure Whop page, only after a written proposal is approved.
+            {copy.pricing.depositNote}
           </p>
         </div>
       </Container>

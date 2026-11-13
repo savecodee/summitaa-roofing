@@ -1,27 +1,28 @@
 import { createFileRoute } from '@tanstack/react-router'
 
-import { whopPublicConfig } from '../../../config/whop'
-import { isPaymentId } from '../../../lib/deposit'
-import { validateFinalInvoice, verifyDepositForInvoice } from '../../../lib/invoice'
-import { normalizeProjectRef } from '../../../lib/project'
+import { whopPublicConfig } from '@/config'
+import { isPaymentId } from '@/lib/deposit'
+import { validateFinalInvoice, verifyDepositForInvoice } from '@/lib/invoice'
+import { normalizeProjectRef } from '@/lib/project'
 import {
   isSameOriginRequest,
   jsonResponse,
   readBearerToken,
   readJsonBody,
   timingSafeEqualString,
-} from '../../../server/http'
+} from '@/server/http'
 import {
   WhopApiError,
   WhopNotConfiguredError,
   WhopTransportError,
-} from '../../../server/whop/client'
+} from '@/server/whop/client'
 import {
   finalInvoiceConfigurationIssues,
   getWhopServerConfig,
-} from '../../../server/whop/config'
-import { createFinalInvoice } from '../../../server/whop/invoices'
-import { getDepositPayment } from '../../../server/whop/payments'
+} from '@/server/whop/config'
+import { createFinalInvoice } from '@/server/whop/invoices'
+import { getDepositPayment } from '@/server/whop/payments'
+import { findSavedPaymentMethodForProject } from '@/server/whop/setup-intents'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -37,8 +38,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * `pay_` reference; this route fetches that payment from Whop and requires a
  * paid status, the configured account and deposit plan, the same project
  * reference, and the configured amount and currency. Only then is the Whop
- * amount used as the credit. The invoice is created as a draft, so nothing is
- * emailed or charged; an operator issues it manually in Whop.
+ * amount used as the credit.
+ *
+ * If a saved payment method exists for the project (from the deposit/save-card
+ * flow), the invoice is created with `collection_method: 'charge_automatically'`
+ * and the balance is charged immediately. Otherwise, the invoice is sent for
+ * manual payment via `collection_method: 'send_invoice'`.
  */
 export const Route = createFileRoute('/api/whop/final-invoice')({
   server: {
@@ -255,8 +260,16 @@ export const Route = createFileRoute('/api/whop/final-invoice')({
           )
         }
 
+        // Look up saved payment method for this project
+        const savedPaymentMethod = await findSavedPaymentMethodForProject(projectRef)
+
         try {
-          const created = await createFinalInvoice(invoice.draft)
+          const created = await createFinalInvoice({
+            draft: invoice.draft,
+            paymentMethodId: savedPaymentMethod?.paymentMethodId ?? null,
+          })
+
+          const wasAutoCharged = !!savedPaymentMethod?.paymentMethodId && created.charged
 
           return jsonResponse(
             {
@@ -267,7 +280,12 @@ export const Route = createFileRoute('/api/whop/final-invoice')({
               balanceDueCents: invoice.draft.balanceDueCents,
               currency: invoice.draft.currency,
               idempotencyKey: invoice.draft.idempotencyKey,
-              note: 'Created as a draft. Nothing was emailed or charged; review and send it manually in Whop. Whop stores idempotency keys for 24 hours.',
+              autoCharged: wasAutoCharged,
+              paymentMethodUsed: wasAutoCharged ? savedPaymentMethod?.paymentMethodId ?? null : null,
+              invoiceUrl: created.url,
+              note: wasAutoCharged
+                ? 'Invoice created and balance auto-charged to the saved payment method.'
+                : 'Invoice created and sent for manual payment. Customer will receive a payment link.',
             },
             { status: 201 },
           )

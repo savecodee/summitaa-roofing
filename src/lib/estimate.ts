@@ -1,4 +1,4 @@
-import { serviceOptions, type ServiceValue } from '../config/site'
+import { serviceOptions, type ServiceValue } from '@/config'
 
 /**
  * Shared estimate-request validation.
@@ -12,6 +12,7 @@ export type EstimateValues = {
   name: string
   email: string
   phone: string
+  address: string
   zip: string
   service: ServiceValue
   details: string
@@ -40,6 +41,7 @@ export const ESTIMATE_FIELD_LABELS: Record<EstimateField, string> = {
   name: 'Full name',
   email: 'Email address',
   phone: 'Phone number',
+  address: 'Property address',
   zip: 'Property ZIP code',
   service: 'Service needed',
   details: 'Project details',
@@ -49,6 +51,7 @@ export const ESTIMATE_LIMITS = {
   name: 120,
   email: 254,
   phoneDigits: 15,
+  address: 200,
   zip: 10,
   details: 1500,
   sourcePath: 200,
@@ -127,6 +130,7 @@ export function normalizeEstimateValues(
     name: sanitizeText(raw.name, ESTIMATE_LIMITS.name),
     email: sanitizeText(raw.email, ESTIMATE_LIMITS.email),
     phone: sanitizeText(raw.phone, 40),
+    address: sanitizeText(raw.address, ESTIMATE_LIMITS.address),
     zip: sanitizeText(raw.zip, ESTIMATE_LIMITS.zip),
     service,
     details: sanitizeDetails(raw.details),
@@ -148,6 +152,8 @@ export function validateEstimateField(
         ? undefined
         : 'Enter a phone number with at least 10 digits.'
     }
+    case 'address':
+      return undefined
     case 'zip':
       return ZIP_PATTERN.test(values.zip.trim())
         ? undefined
@@ -273,6 +279,7 @@ export function buildLeadMetadata(
     name: values.name,
     email: values.email,
     phone: values.phone,
+    address: values.address,
     zip: values.zip,
     service: values.service,
     details: values.details,

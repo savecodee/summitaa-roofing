@@ -10,11 +10,14 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminBillFinalBalanceRouteImport } from './routes/admin.bill-final-balance'
+import { Route as ApiEstimateEmailRouteImport } from './routes/api/estimate-email'
 import { Route as ApiEventsRouteImport } from './routes/api/events'
 import { Route as ApiLeadsRouteImport } from './routes/api/leads'
 import { Route as DepositIndexRouteImport } from './routes/deposit.index'
 import { Route as DepositReturnRouteImport } from './routes/deposit.return'
 import { Route as DepositSaveCardRouteImport } from './routes/deposit.save-card'
+import { Route as SandboxDepositRouteImport } from './routes/sandbox.deposit'
 import { Route as ApiWhopDepositRouteImport } from './routes/api/whop/deposit'
 import { Route as ApiWhopDepositConfigRouteImport } from './routes/api/whop/deposit-config'
 import { Route as ApiWhopFinalInvoiceRouteImport } from './routes/api/whop/final-invoice'
@@ -28,6 +31,16 @@ import { Route as ApiAuthWhopStartRouteImport } from './routes/api/auth/whop/sta
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminBillFinalBalanceRoute = AdminBillFinalBalanceRouteImport.update({
+  id: '/admin/bill-final-balance',
+  path: '/admin/bill-final-balance',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiEstimateEmailRoute = ApiEstimateEmailRouteImport.update({
+  id: '/api/estimate-email',
+  path: '/api/estimate-email',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiEventsRoute = ApiEventsRouteImport.update({
@@ -53,6 +66,11 @@ const DepositReturnRoute = DepositReturnRouteImport.update({
 const DepositSaveCardRoute = DepositSaveCardRouteImport.update({
   id: '/deposit/save-card',
   path: '/deposit/save-card',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SandboxDepositRoute = SandboxDepositRouteImport.update({
+  id: '/sandbox/deposit',
+  path: '/sandbox/deposit',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiWhopDepositRoute = ApiWhopDepositRouteImport.update({
@@ -103,10 +121,13 @@ const ApiAuthWhopStartRoute = ApiAuthWhopStartRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin/bill-final-balance': typeof AdminBillFinalBalanceRoute
+  '/api/estimate-email': typeof ApiEstimateEmailRoute
   '/api/events': typeof ApiEventsRoute
   '/api/leads': typeof ApiLeadsRoute
   '/deposit/return': typeof DepositReturnRoute
   '/deposit/save-card': typeof DepositSaveCardRoute
+  '/sandbox/deposit': typeof SandboxDepositRoute
   '/deposit/': typeof DepositIndexRoute
   '/api/whop/deposit': typeof ApiWhopDepositRoute
   '/api/whop/deposit-config': typeof ApiWhopDepositConfigRoute
@@ -120,10 +141,13 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/admin/bill-final-balance': typeof AdminBillFinalBalanceRoute
+  '/api/estimate-email': typeof ApiEstimateEmailRoute
   '/api/events': typeof ApiEventsRoute
   '/api/leads': typeof ApiLeadsRoute
   '/deposit/return': typeof DepositReturnRoute
   '/deposit/save-card': typeof DepositSaveCardRoute
+  '/sandbox/deposit': typeof SandboxDepositRoute
   '/deposit': typeof DepositIndexRoute
   '/api/whop/deposit': typeof ApiWhopDepositRoute
   '/api/whop/deposit-config': typeof ApiWhopDepositConfigRoute
@@ -138,10 +162,13 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin/bill-final-balance': typeof AdminBillFinalBalanceRoute
+  '/api/estimate-email': typeof ApiEstimateEmailRoute
   '/api/events': typeof ApiEventsRoute
   '/api/leads': typeof ApiLeadsRoute
   '/deposit/return': typeof DepositReturnRoute
   '/deposit/save-card': typeof DepositSaveCardRoute
+  '/sandbox/deposit': typeof SandboxDepositRoute
   '/deposit/': typeof DepositIndexRoute
   '/api/whop/deposit': typeof ApiWhopDepositRoute
   '/api/whop/deposit-config': typeof ApiWhopDepositConfigRoute
@@ -157,10 +184,13 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/admin/bill-final-balance'
+    | '/api/estimate-email'
     | '/api/events'
     | '/api/leads'
     | '/deposit/return'
     | '/deposit/save-card'
+    | '/sandbox/deposit'
     | '/deposit/'
     | '/api/whop/deposit'
     | '/api/whop/deposit-config'
@@ -174,10 +204,13 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/admin/bill-final-balance'
+    | '/api/estimate-email'
     | '/api/events'
     | '/api/leads'
     | '/deposit/return'
     | '/deposit/save-card'
+    | '/sandbox/deposit'
     | '/deposit'
     | '/api/whop/deposit'
     | '/api/whop/deposit-config'
@@ -191,10 +224,13 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/admin/bill-final-balance'
+    | '/api/estimate-email'
     | '/api/events'
     | '/api/leads'
     | '/deposit/return'
     | '/deposit/save-card'
+    | '/sandbox/deposit'
     | '/deposit/'
     | '/api/whop/deposit'
     | '/api/whop/deposit-config'
@@ -209,10 +245,13 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminBillFinalBalanceRoute: typeof AdminBillFinalBalanceRoute
+  ApiEstimateEmailRoute: typeof ApiEstimateEmailRoute
   ApiEventsRoute: typeof ApiEventsRoute
   ApiLeadsRoute: typeof ApiLeadsRoute
   DepositReturnRoute: typeof DepositReturnRoute
   DepositSaveCardRoute: typeof DepositSaveCardRoute
+  SandboxDepositRoute: typeof SandboxDepositRoute
   DepositIndexRoute: typeof DepositIndexRoute
   ApiWhopDepositRoute: typeof ApiWhopDepositRoute
   ApiWhopDepositConfigRoute: typeof ApiWhopDepositConfigRoute
@@ -232,6 +271,20 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/bill-final-balance': {
+      id: '/admin/bill-final-balance'
+      path: '/admin/bill-final-balance'
+      fullPath: '/admin/bill-final-balance'
+      preLoaderRoute: typeof AdminBillFinalBalanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/estimate-email': {
+      id: '/api/estimate-email'
+      path: '/api/estimate-email'
+      fullPath: '/api/estimate-email'
+      preLoaderRoute: typeof ApiEstimateEmailRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/events': {
@@ -267,6 +320,13 @@ declare module '@tanstack/react-router' {
       path: '/deposit/save-card'
       fullPath: '/deposit/save-card'
       preLoaderRoute: typeof DepositSaveCardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sandbox/deposit': {
+      id: '/sandbox/deposit'
+      path: '/sandbox/deposit'
+      fullPath: '/sandbox/deposit'
+      preLoaderRoute: typeof SandboxDepositRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/whop/deposit': {
@@ -337,10 +397,13 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminBillFinalBalanceRoute: AdminBillFinalBalanceRoute,
+  ApiEstimateEmailRoute: ApiEstimateEmailRoute,
   ApiEventsRoute: ApiEventsRoute,
   ApiLeadsRoute: ApiLeadsRoute,
   DepositReturnRoute: DepositReturnRoute,
   DepositSaveCardRoute: DepositSaveCardRoute,
+  SandboxDepositRoute: SandboxDepositRoute,
   DepositIndexRoute: DepositIndexRoute,
   ApiWhopDepositRoute: ApiWhopDepositRoute,
   ApiWhopDepositConfigRoute: ApiWhopDepositConfigRoute,

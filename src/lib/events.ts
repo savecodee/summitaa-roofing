@@ -1,4 +1,4 @@
-import { serviceOptions } from '../config/site'
+import { serviceOptions } from '@/config'
 import { normalizeProjectRef } from './project'
 
 /**

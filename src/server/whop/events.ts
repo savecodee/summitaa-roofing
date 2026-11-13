@@ -1,6 +1,6 @@
 import '@tanstack/react-start/server-only'
 
-import { whopPublicConfig } from '../../config/whop'
+import { whopPublicConfig } from '@/config'
 import { whopRequest } from './client'
 
 export type ServerEventInput = {

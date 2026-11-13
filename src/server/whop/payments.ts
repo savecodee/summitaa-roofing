@@ -1,6 +1,7 @@
 import '@tanstack/react-start/server-only'
 
-import { whopPublicConfig } from '../../config/whop'
+import { whopPublicConfig } from '@/config'
+import { checkoutPlanByKey, type CheckoutPlanKey } from '../../lib/checkout-plans'
 import {
   buildDepositMetadata,
   depositIdempotencyKey,
@@ -11,7 +12,11 @@ import {
   type NormalizedPaymentStatus,
 } from '../../lib/deposit'
 import { asRecord, pickNumber, pickString, whopRequest } from './client'
-import { depositConfigurationIssues, getWhopServerConfig } from './config'
+import {
+  depositConfigurationIssues,
+  getWhopServerConfig,
+  planConfigurationIssues,
+} from './config'
 
 const PAYMENTS_API_VERSION = '2026-09-22'
 
@@ -45,34 +50,47 @@ export type DepositPaymentStatus = {
 }
 
 /**
- * Charges the configured deposit plan with a single-use confirmation token.
+ * Charges one allowlisted plan with a single-use confirmation token.
  *
- * `variant_id` is always the server-configured plan; the browser cannot choose
- * an amount. The idempotency key is stable for the client attempt, so a retried
- * request within Whop's 24-hour window replays the original payment instead of
- * charging twice.
+ * `variant_id` is resolved from the server allowlist; the browser can name a
+ * plan key but cannot choose a plan id or an amount. The legacy proposal
+ * deposit remains available when no plan key is sent. The idempotency key is
+ * stable for the client attempt, so a retried request within Whop's 24-hour
+ * window replays the original payment instead of charging twice.
  */
 export async function createDepositPayment(input: {
   projectRef: string
   attemptId: string
   confirmationToken: string
   returnUrl: string
+  planKey?: CheckoutPlanKey | null
 }): Promise<CreatedDepositPayment> {
   const config = getWhopServerConfig()
-  if (!config.depositPlanId || depositConfigurationIssues(config).length > 0) {
+  const plan = input.planKey ? checkoutPlanByKey(input.planKey) : null
+
+  if (input.planKey && !plan) throw new Error('invalid_plan')
+  if (!config.apiConfigured && !config.apiKey) throw new Error('deposit_not_configured')
+
+  if (plan) {
+    if (planConfigurationIssues(config).length > 0) {
+      throw new Error('deposit_not_configured')
+    }
+  } else if (!config.depositPlanId || depositConfigurationIssues(config).length > 0) {
     throw new Error('deposit_not_configured')
   }
+
+  const variantId = plan?.planId ?? config.depositPlanId
 
   const payload = await whopRequest('/payments', {
     method: 'POST',
     apiVersion: PAYMENTS_API_VERSION,
-    idempotencyKey: depositIdempotencyKey(input.projectRef, input.attemptId),
+    idempotencyKey: depositIdempotencyKey(input.projectRef, input.attemptId, plan?.key),
     timeoutMs: 20_000,
     body: {
       account_id: whopPublicConfig.accountId,
       confirmation_token: input.confirmationToken,
-      variant_id: config.depositPlanId,
-      metadata: buildDepositMetadata(input.projectRef, input.attemptId),
+      variant_id: variantId,
+      metadata: buildDepositMetadata(input.projectRef, input.attemptId, plan?.key),
       return_url: input.returnUrl,
     },
   })

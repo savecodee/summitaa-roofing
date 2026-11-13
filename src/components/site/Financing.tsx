@@ -1,26 +1,6 @@
-import type { ServiceValue } from '../../config/site'
+import { copy, type ServiceValue } from '@/config'
 import { ArrowRight, Info } from './icons'
 import { Container, Eyebrow } from './primitives'
-
-const questions = [
-  {
-    number: '01',
-    title: 'Start the conversation early.',
-    detail: 'Mention financing when you request an estimate so it can be discussed with the scope.',
-  },
-  {
-    number: '02',
-    title: 'Third-party terms apply.',
-    detail:
-      'Any lender application, approval, rate, and repayment schedule is set by the lender — not by Summitaa.',
-  },
-  {
-    number: '03',
-    title: 'Put the details in writing.',
-    detail:
-      'Payment structure and project terms should be documented in the signed agreement before work begins.',
-  },
-] as const
 
 export function Financing({
   onRequestService,
@@ -42,36 +22,34 @@ export function Financing({
 
           <div className="relative grid lg:grid-cols-[1.12fr_0.88fr]">
             <div className="p-7 sm:p-10 lg:p-14">
-              <Eyebrow tone="light">Financing</Eyebrow>
+              <Eyebrow tone="light">{copy.financing.eyebrow}</Eyebrow>
               <h2
                 id="financing-heading"
                 className="mt-5 max-w-[580px] font-display text-[clamp(2.4rem,4.2vw,3.8rem)] font-medium leading-[1.03] tracking-[-0.035em] text-cream balance"
               >
-                A larger project, planned without pressure.
+                {copy.financing.title}
               </h2>
               <p className="mt-6 max-w-[540px] text-[14px] leading-[1.85] text-cream/65 pretty">
-                If financing is part of your plan, raise it during the estimate. We can talk through
-                whether third-party financing options may apply to your project. Any application,
-                approval, rate, and repayment terms are set by the lender.
+                {copy.financing.intro}
               </p>
 
               <div className="mt-8 flex max-w-[540px] gap-3.5 border border-cream/15 bg-cream/[0.04] p-4">
                 <Info className="mt-0.5 size-4 shrink-0 text-copper-light" />
                 <p className="text-[11.5px] leading-[1.75] text-cream/60">
-                  <strong className="font-semibold text-cream">Important:</strong> financing is not
-                  offered or approved through this website. Nothing here is a credit application,
-                  approval, or guarantee of terms. Availability and eligibility are determined by
-                  the lender.
+                  <strong className="font-semibold text-cream">
+                    {copy.financing.importantLabel}
+                  </strong>{' '}
+                  {copy.financing.importantBody}
                 </p>
               </div>
             </div>
 
             <div className="border-t border-cream/15 p-7 sm:p-10 lg:border-l lg:border-t-0 lg:p-12">
               <p className="text-[9px] font-bold uppercase tracking-[0.24em] text-copper-light">
-                Worth asking about
+                {copy.financing.questionsLabel}
               </p>
               <ol className="mt-6 space-y-5">
-                {questions.map((question) => (
+                {copy.financing.questions.map((question) => (
                   <li key={question.number} className="flex gap-4">
                     <span className="mt-0.5 font-display text-[15px] text-copper-light">
                       {question.number}
@@ -91,7 +69,7 @@ export function Financing({
                 onClick={() => onRequestService('financing-question')}
                 className="group mt-8 inline-flex items-center gap-2.5 border-t border-cream/15 pt-6 text-[10px] font-bold uppercase tracking-[0.18em] text-cream transition-colors hover:text-copper-light"
               >
-                Ask about financing
+                {copy.financing.cta}
                 <ArrowRight className="size-3.5 transition-transform duration-200 group-hover:translate-x-1" />
               </a>
             </div>

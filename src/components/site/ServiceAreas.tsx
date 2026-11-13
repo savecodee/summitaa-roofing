@@ -1,4 +1,4 @@
-import { sampleServiceAreas } from '../../config/site'
+import { copy, sampleServiceAreas } from '@/config'
 import { ArrowRight, Info, MapPin } from './icons'
 import { Container, Eyebrow, SampleTag } from './primitives'
 
@@ -11,24 +11,22 @@ export function ServiceAreas() {
     >
       <Container className="grid gap-12 py-20 sm:py-24 lg:grid-cols-[0.82fr_1.18fr] lg:items-center lg:gap-20 lg:py-28">
         <div>
-          <Eyebrow>Service areas</Eyebrow>
+          <Eyebrow>{copy.areas.eyebrow}</Eyebrow>
           <h2
             id="areas-heading"
             className="mt-5 max-w-[480px] font-display text-[clamp(2.5rem,4.5vw,4.2rem)] font-medium leading-[1.02] tracking-[-0.035em] text-ink balance"
           >
-            Local coverage, clearly confirmed.
+            {copy.areas.title}
           </h2>
           <p className="mt-6 max-w-md text-[14.5px] leading-[1.85] text-slate pretty">
-            We would rather confirm your address than guess. Send your property ZIP code with your
-            request and we can tell you whether it falls within the current service area.
+            {copy.areas.intro}
           </p>
 
           <div className="mt-8 flex max-w-md gap-3.5 border border-ink/10 bg-paper p-4">
             <Info className="mt-0.5 size-4 shrink-0 text-copper" />
             <p className="text-[11.5px] leading-[1.7] text-slate">
-              <strong className="font-bold text-ink">Sample content:</strong> the communities below
-              are illustrative placeholders, not confirmed service areas. Replace them with your
-              actual coverage before launch.
+              <strong className="font-bold text-ink">{copy.areas.sampleLabel}</strong>{' '}
+              {copy.areas.sampleNote}
             </p>
           </div>
 
@@ -36,17 +34,17 @@ export function ServiceAreas() {
             href="#estimate"
             className="group mt-8 inline-flex items-center gap-2.5 text-[10px] font-bold uppercase tracking-[0.18em] text-ink transition-colors hover:text-copper"
           >
-            Check your ZIP code
+            {copy.areas.cta}
             <ArrowRight className="size-3.5 transition-transform duration-200 group-hover:translate-x-1" />
           </a>
         </div>
 
-        <div className="relative border border-ink/10 bg-paper p-5 shadow-[0_24px_60px_-48px_rgba(8,23,32,0.5)] sm:p-7">
+        <div className="relative border border-ink/10 bg-paper p-5 shadow-card-soft sm:p-7">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-5">
             <p className="text-[9px] font-bold uppercase tracking-[0.24em] text-slate">
-              Coverage overview
+              {copy.areas.coverageLabel}
             </p>
-            <SampleTag>Sample areas</SampleTag>
+            <SampleTag>{copy.areas.sampleTag}</SampleTag>
           </div>
 
           <div className="relative mt-5 overflow-hidden bg-cream/60">
@@ -54,7 +52,7 @@ export function ServiceAreas() {
               className="pointer-events-none absolute inset-0 opacity-70"
               style={{
                 backgroundImage:
-                  'radial-gradient(rgba(13, 32, 43, 0.13) 1px, transparent 1px)',
+                  'radial-gradient(rgb(var(--brand-ink-rgb) / 0.13) 1px, transparent 1px)',
                 backgroundSize: '19px 19px',
               }}
               aria-hidden="true"
@@ -91,14 +89,12 @@ export function ServiceAreas() {
           </div>
 
           <div className="mt-5 flex flex-col gap-2 border-t border-line pt-5 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-[11px] leading-relaxed text-slate">
-              Illustrative locations only — no coverage is implied.
-            </p>
+            <p className="text-[11px] leading-relaxed text-slate">{copy.areas.footnote}</p>
             <a
               href="#estimate"
               className="group inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-ink transition-colors hover:text-copper"
             >
-              Ask about your ZIP
+              {copy.areas.askCta}
               <ArrowRight className="size-3.5 transition-transform duration-200 group-hover:translate-x-1" />
             </a>
           </div>

@@ -1,4 +1,4 @@
-﻿import '@tanstack/react-start/server-only'
+import '@tanstack/react-start/server-only'
 
 /**
  * Server-only Whop configuration.
@@ -16,6 +16,7 @@ export type WhopServerConfig = {
   apiKey: string | null
   apiConfigured: boolean
   apiBaseUrl: string
+  environment: 'production' | 'sandbox'
   webhookSecret: string | null
   depositPlanId: string | null
   depositAmountCents: number | null
@@ -45,6 +46,10 @@ function parsePositiveInteger(value: string | null): number | null {
 }
 
 function resolveApiBaseUrl(): string {
+  const whopEnv = readEnv('WHOP_ENV')?.toLowerCase()
+  if (whopEnv === 'sandbox') return SANDBOX_API_BASE
+  if (whopEnv === 'production') return PRODUCTION_API_BASE
+
   // Whop's hosted runtime sets WHOP_API_ORIGIN and signs matching server-side
   // requests automatically, so no API key ever enters the app.
   const origin = readEnv('WHOP_API_ORIGIN')
@@ -79,6 +84,7 @@ export function getWhopServerConfig(): WhopServerConfig {
     apiKey,
     apiConfigured: Boolean(apiKey || readEnv('WHOP_API_ORIGIN')),
     apiBaseUrl: resolveApiBaseUrl(),
+    environment: (readEnv('WHOP_ENV')?.toLowerCase() === 'sandbox' ? 'sandbox' : 'production'),
     webhookSecret: readEnv('WHOP_WEBHOOK_SECRET'),
     depositPlanId: readEnv('WHOP_DEPOSIT_PLAN_ID'),
     depositAmountCents: parsePositiveInteger(readEnv('WHOP_DEPOSIT_AMOUNT_CENTS')),
@@ -91,8 +97,23 @@ export function getWhopServerConfig(): WhopServerConfig {
 }
 
 /**
- * Non-secret reasons the deposit flow cannot run. Variable NAMES are safe to
- * return; variable VALUES never are.
+ * Non-secret reasons a self-serve plan checkout cannot run. The public plans
+ * carry their own fixed amount and currency, so only the API credential is
+ * required; the legacy deposit environment variables are not consulted.
+ */
+export function planConfigurationIssues(config: WhopServerConfig): string[] {
+  const issues: string[] = []
+
+  if (!config.apiConfigured && !config.apiKey) {
+    issues.push('WHOP_API_KEY is not configured on the server.')
+  }
+
+  return issues
+}
+
+/**
+ * Non-secret reasons the legacy deposit flow cannot run. Variable NAMES are
+ * safe to return; variable VALUES never are.
  */
 export function depositConfigurationIssues(config: WhopServerConfig): string[] {
   const issues: string[] = []

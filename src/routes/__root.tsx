@@ -2,14 +2,52 @@ import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 
 import appCss from '../styles.css?url'
-import { whopPixelBootstrapScript } from '../lib/pixel'
+import { whopPixelBootstrapScript, WHOP_PIXEL_SCRIPT_URL } from '../lib/pixel'
+import { contentSecurityPolicy } from '@whop/elements'
+import { brandColors, brandThemeCss, siteConfig } from '@/config'
+import { DebugPanel } from '../components/site/primitives'
 
-const FAVICON =
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%230d202b'/%3E%3Cpath d='M11 34 32 16l21 18' fill='none' stroke='%23f7f2e9' stroke-width='3'/%3E%3Cpath d='M17 31v19h30V31' fill='none' stroke='%23f7f2e9' stroke-width='3'/%3E%3Cpath d='M29 50V38h7v12' fill='none' stroke='%23a85a30' stroke-width='3'/%3E%3C/svg%3E"
+const FAVICON = (() => {
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' fill='${brandColors.ink}'/><path d='M11 34 32 16l21 18' fill='none' stroke='${brandColors.cream}' stroke-width='3'/><path d='M17 31v19h30V31' fill='none' stroke='${brandColors.cream}' stroke-width='3'/><path d='M29 50V38h7v12' fill='none' stroke='${brandColors.copper}' stroke-width='3'/></svg>`
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`
+})()
+
+const PAGE_TITLE = `${siteConfig.name} | Residential Roof Repair, Replacement & Inspection`
+
+// Whop Elements require the hosted frames, SDK, and wallet origins in the page
+// CSP. One hosted origin serves both the production checkout (/deposit) and the
+// sandbox checkout (/sandbox/deposit), so the policy must allow both Whop API
+// origins. The docs list the sandbox sources separately:
+// https://docs.whop.com/elements/latest/getting-started#content-security-policy
+const productionWhopCsp = contentSecurityPolicy({
+  environment: 'production',
+  wallets: true,
+  bankConnections: false,
+})
+const sandboxWhopCsp = contentSecurityPolicy({
+  environment: 'sandbox',
+  wallets: true,
+  bankConnections: false,
+})
+// The docs table lists `https://assets.braintreegateway.com` in `script-src`
+// for wallets, but the installed Elements helper omits it. Stripe's Basil
+// script and Apple Pay's web fonts are loaded by Elements at runtime and are
+// not in the table, so they are listed here to keep card/wallet rendering from
+// being blocked:
+// https://docs.whop.com/elements/latest/getting-started#content-security-policy
+const extraCspSources =
+  "default-src 'self'; script-src 'self' 'unsafe-inline' https://t.whop.tw https://assets.braintreegateway.com https://js.stripe.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://www.paypalobjects.com; font-src 'self' data: https://applepay.cdn-apple.com; connect-src 'self' https://api.whop.com https://t.whop.tw; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; frame-src 'self' https://js.stripe.com"
+const contentSecurityPolicyValue = sandboxWhopCsp.merge(
+  productionWhopCsp.merge(extraCspSources),
+)
 
 export const Route = createRootRoute({
   head: () => ({
     meta: [
+      {
+        httpEquiv: 'Content-Security-Policy',
+        content: contentSecurityPolicyValue,
+      },
       {
         charSet: 'utf-8',
       },
@@ -18,25 +56,23 @@ export const Route = createRootRoute({
         content: 'width=device-width, initial-scale=1',
       },
       {
-        title: 'Summitaa Roofing | Residential Roof Repair, Replacement & Inspection',
+        title: PAGE_TITLE,
       },
       {
         name: 'description',
-        content:
-          'Summitaa Roofing provides residential roof repair, roof replacement, and roof inspections with an inspection-first process, clear written scopes, and straightforward communication.',
+        content: siteConfig.description,
       },
       {
         name: 'theme-color',
-        content: '#0d202b',
+        content: brandColors.ink,
       },
       {
         property: 'og:title',
-        content: 'Summitaa Roofing | Residential Roof Repair, Replacement & Inspection',
+        content: PAGE_TITLE,
       },
       {
         property: 'og:description',
-        content:
-          'A roof you can stop thinking about. Residential roofing with an inspection-first process and written scopes.',
+        content: siteConfig.description,
       },
       {
         property: 'og:type',
@@ -44,7 +80,7 @@ export const Route = createRootRoute({
       },
       {
         property: 'og:site_name',
-        content: 'Summitaa Roofing',
+        content: siteConfig.name,
       },
       {
         name: 'twitter:card',
@@ -75,6 +111,9 @@ function RootDocument({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <head>
+        {/* Brand palette from `siteConfig.brand` — the Tailwind theme in
+            `styles.css` resolves every color token to these variables. */}
+        <style dangerouslySetInnerHTML={{ __html: brandThemeCss() }} />
         <HeadContent />
         {/*
           Official Whop Pixel bootstrap. The account ID is public; no API key or
@@ -82,10 +121,12 @@ function RootDocument({ children }: { children: ReactNode }) {
           made before the remote script arrives flush in order.
         */}
         <script dangerouslySetInnerHTML={{ __html: whopPixelBootstrapScript() }} />
+        <script async src={WHOP_PIXEL_SCRIPT_URL} />
       </head>
       <body>
         {children}
         <Scripts />
+        <DebugPanel />
       </body>
     </html>
   )

@@ -111,9 +111,9 @@ export function trackDepositStarted(projectRef: string, planId: string): void {
 }
 
 /**
- * Fires as soon as a validated estimate request is submitted. The event id is
- * derived from the request id, so the optional server-side event uses the same
- * id and cannot double count.
+ * Fires after the server confirms an estimate request was recorded as a lead.
+ * The event id is derived from the request id, so the server-side event uses
+ * the same id and cannot double count.
  */
 export function trackEstimateRequested(requestId: string): void {
   if (typeof window === 'undefined') return

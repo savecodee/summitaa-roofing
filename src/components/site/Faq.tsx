@@ -1,49 +1,7 @@
 import { useState } from 'react'
+import { copy } from '@/config'
 import { Plus } from './icons'
 import { ButtonLink, Container, Eyebrow } from './primitives'
-
-const faqs = [
-  {
-    question: 'What does the $149 roof inspection include?',
-    answer:
-      'The example inspection covers a visual review of accessible roof surfaces, accessible attic areas where it is safe to do so, photo notes, and a written summary of observed conditions. It does not include repair work, invasive testing, or a promise about how long the roof will last. The $149 figure is a configurable example price; actual pricing depends on the property and a written agreement.',
-  },
-  {
-    question: 'Is the inspection fee credited toward repair work?',
-    answer:
-      'Any credit, discount, or application of the inspection fee must be stated in your written proposal. The example pricing on this page does not promise a credit or guarantee that inspection fees will be applied to future work.',
-  },
-  {
-    question: 'How do I know whether I need a repair or a replacement?',
-    answer:
-      'That is what the inspection is for. We look at the condition of the roof, visible damage, flashing, and other accessible details, then explain the options we see. The decision is yours, and the scope should be documented in writing before any work begins.',
-  },
-  {
-    question: 'Can you help document storm damage for an insurance claim?',
-    answer:
-      'We can record observed conditions in photos and in a written scope. We do not decide whether damage is covered, and no claim outcome is promised. Coverage and payment decisions are made by your insurer. Any information we provide is documentation, not a coverage determination.',
-  },
-  {
-    question: 'How long does a roof replacement take?',
-    answer:
-      'It depends on the size and complexity of the roof, the materials selected, access to the property, and weather. A written proposal should include an expected schedule, and schedules can change if site or weather conditions change.',
-  },
-  {
-    question: 'What is the $500 project deposit for?',
-    answer:
-      'It is an example deposit that would reserve project scheduling after you approve a written proposal and would be applied to the project total. Refund, cancellation, and payment terms must be defined in the written agreement. When online deposits are enabled, the payment is collected on the secure Whop deposit page that comes with your project link — not on this marketing page.',
-  },
-  {
-    question: 'Is financing available?',
-    answer:
-      'Nothing on this website is a financing offer or an approval. If third-party financing may apply to your project, any application, approval, rates, and repayment terms are set by the lender. Ask about options during your estimate so the details can be discussed alongside the scope.',
-  },
-  {
-    question: 'Which service areas are covered?',
-    answer:
-      'The communities listed on this page are clearly labeled sample areas for this preview — they are not confirmed coverage. Before launch, this section should be replaced with verified service areas. You can include your property ZIP code in an estimate request to confirm coverage once the live process is connected.',
-  },
-] as const
 
 export function Faq() {
   const [openIndex, setOpenIndex] = useState<number | null>(0)
@@ -52,30 +10,27 @@ export function Faq() {
     <section id="faq" aria-labelledby="faq-heading" className="border-b border-line bg-paper">
       <Container className="grid gap-12 py-20 sm:py-24 lg:grid-cols-[0.72fr_1.28fr] lg:gap-20 lg:py-28">
         <div className="self-start lg:sticky lg:top-28">
-          <Eyebrow>FAQ</Eyebrow>
+          <Eyebrow>{copy.faq.eyebrow}</Eyebrow>
           <h2
             id="faq-heading"
             className="mt-5 max-w-[420px] font-display text-[clamp(2.5rem,4.5vw,4.2rem)] font-medium leading-[1.02] tracking-[-0.035em] text-ink balance"
           >
-            Questions worth asking.
+            {copy.faq.title}
           </h2>
           <p className="mt-6 max-w-sm text-[14px] leading-[1.85] text-slate pretty">
-            Straight answers about inspections, pricing, deposits, and what happens next. Anything
-            unclear is worth asking before you approve a scope.
+            {copy.faq.intro}
           </p>
 
           <div className="mt-8 border-t border-line pt-6">
-            <p className="text-[11px] leading-relaxed text-slate">
-              Still deciding what your roof needs?
-            </p>
+            <p className="text-[11px] leading-relaxed text-slate">{copy.faq.stillDeciding}</p>
             <ButtonLink href="#contact" variant="secondary" className="mt-4">
-              Talk to us
+              {copy.faq.cta}
             </ButtonLink>
           </div>
         </div>
 
         <div className="border-y border-line">
-          {faqs.map((faq, index) => {
+          {copy.faq.items.map((faq, index) => {
             const isOpen = openIndex === index
             const panelId = `faq-panel-${index}`
             const buttonId = `faq-button-${index}`

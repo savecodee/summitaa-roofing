@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 
+import { checkoutPlanByKey } from '../../../lib/checkout-plans'
 import {
   buildDepositReturnUrl,
   isConfirmationToken,
@@ -12,7 +13,11 @@ import {
   WhopNotConfiguredError,
   WhopTransportError,
 } from '../../../server/whop/client'
-import { depositConfigurationIssues, getWhopServerConfig } from '../../../server/whop/config'
+import {
+  depositConfigurationIssues,
+  getWhopServerConfig,
+  planConfigurationIssues,
+} from '../../../server/whop/config'
 import { createDepositPayment } from '../../../server/whop/payments'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -48,6 +53,16 @@ export const Route = createFileRoute('/api/whop/deposit')({
         const projectRef = normalizeProjectRef(body.value.projectRef)
         const attemptId = body.value.attemptId
         const confirmationToken = body.value.confirmationToken
+        const requestedPlanKey =
+          typeof body.value.planKey === 'string' ? body.value.planKey : null
+        const plan = requestedPlanKey ? checkoutPlanByKey(requestedPlanKey) : null
+
+        if (requestedPlanKey && !plan) {
+          return jsonResponse(
+            { ok: false, code: 'invalid_plan', message: 'That plan is not available for checkout.' },
+            { status: 400 },
+          )
+        }
 
         if (!projectRef) {
           return jsonResponse(
@@ -64,21 +79,27 @@ export const Route = createFileRoute('/api/whop/deposit')({
         }
 
         const config = getWhopServerConfig()
-        const issues = depositConfigurationIssues(config)
+        const issues = plan
+          ? planConfigurationIssues(config)
+          : depositConfigurationIssues(config)
         if (issues.length > 0) {
           return jsonResponse(
             {
               ok: false,
               code: 'not_configured',
               message:
-                'Online deposit payments are not connected yet. Please contact the office to arrange payment.',
+                'Online payments are not connected yet. Please contact the office to arrange payment.',
               issues,
             },
             { status: 503 },
           )
         }
 
-        const returnUrl = buildDepositReturnUrl(new URL(request.url).origin, projectRef)
+        const returnUrl = buildDepositReturnUrl(
+          new URL(request.url).origin,
+          projectRef,
+          plan?.key,
+        )
         if (!returnUrl) {
           return jsonResponse(
             {
@@ -96,6 +117,7 @@ export const Route = createFileRoute('/api/whop/deposit')({
             attemptId,
             confirmationToken,
             returnUrl,
+            planKey: plan?.key ?? null,
           })
 
           return jsonResponse({
@@ -104,6 +126,7 @@ export const Route = createFileRoute('/api/whop/deposit')({
             status: payment.status,
             paid: payment.paid,
             clientSecret: payment.clientSecret,
+            planKey: plan?.key ?? null,
           })
         } catch (error) {
           if (error instanceof WhopNotConfiguredError) {

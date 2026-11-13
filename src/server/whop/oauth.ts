@@ -1,6 +1,6 @@
 import '@tanstack/react-start/server-only'
 
-import { whopPublicConfig } from '../../config/whop'
+import { whopPublicConfig } from '@/config'
 
 /**
  * Server-only helpers for "Sign in with Whop" (OAuth 2.1 + PKCE).

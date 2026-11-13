@@ -106,7 +106,7 @@ beforeEach(() => {
   invoiceResponder = () =>
     jsonResponse({
       id: 'inv_route_1',
-      status: 'draft',
+      status: 'open',
       pay_online_url: 'https://whop.com/invoice/inv_route_1',
     })
 
@@ -146,7 +146,7 @@ afterEach(() => {
 })
 
 describe('final invoice route end to end (mocked Whop API)', () => {
-  test('verifies a paid deposit and creates a draft with the official invoice link', async () => {
+  test('verifies a paid deposit and creates a real invoice with the official invoice link', async () => {
     const { response, body } = await postInvoice(invoiceBody())
 
     expect(response.status).toBe(201)
@@ -154,15 +154,16 @@ describe('final invoice route end to end (mocked Whop API)', () => {
       ok: true,
       invoice: {
         id: 'inv_route_1',
-        status: 'draft',
+        status: 'open',
         url: 'https://whop.com/invoice/inv_route_1',
       },
       depositPaymentId: PAYMENT_ID,
       depositCreditCents: 50_000,
       balanceDueCents: 99_900,
       currency: 'usd',
+      autoCharged: false,
     })
-    expect(body.note).toContain('Nothing was emailed or charged')
+    expect(body.note).toContain('Invoice created and sent for manual payment')
 
     expect(paymentRequests).toHaveLength(1)
     expect(paymentRequests[0].url).toBe(
@@ -180,7 +181,7 @@ describe('final invoice route end to end (mocked Whop API)', () => {
       account_id: ACCOUNT_ID,
       product_id: 'prod_UxTHDvkWPVf68',
       collection_method: 'send_invoice',
-      save_as_draft: true,
+      save_as_draft: false,
       plan: { currency: 'usd', plan_type: 'one_time', initial_price: 999 },
     })
     expect(invoiceRequest.body.line_items).toEqual([
@@ -289,15 +290,15 @@ describe('final invoice route end to end (mocked Whop API)', () => {
     expect(body).toMatchObject({ ok: false, code: 'possible_duplicate' })
   })
 
-  test('a created draft with no hosted link still returns its id and status', async () => {
-    invoiceResponder = () => jsonResponse({ id: 'inv_no_link', status: 'draft' })
+  test('a created invoice with no hosted link still returns its id and status', async () => {
+    invoiceResponder = () => jsonResponse({ id: 'inv_no_link', status: 'open' })
 
     const { response, body } = await postInvoice(invoiceBody())
 
     expect(response.status).toBe(201)
     expect(body).toMatchObject({
       ok: true,
-      invoice: { id: 'inv_no_link', status: 'draft', url: null },
+      invoice: { id: 'inv_no_link', status: 'open', url: null },
     })
   })
 })

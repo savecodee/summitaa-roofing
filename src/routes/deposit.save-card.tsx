@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import {
   BrandingElement,
@@ -15,7 +15,9 @@ import { Header } from '../components/site/Header'
 import { Footer } from '../components/site/ContactFooter'
 import { ButtonLink, Container, Eyebrow, SampleTag } from '../components/site/primitives'
 import { ArrowRight, Check, Info } from '../components/site/icons'
-import { whopPublicConfig } from '../config/whop'
+import { PaymentErrorBoundary } from '../components/site/PaymentErrorBoundary'
+import { whopPublicConfig, siteConfig } from '@/config'
+import { readCustomerSession } from '../lib/customer'
 import { makeDepositAttemptId } from '../lib/deposit'
 import { buildSaveCardReturnUrl, isSetupIntentId } from '../lib/save-card'
 
@@ -31,7 +33,7 @@ export const Route = createFileRoute('/deposit/save-card')({
   }),
   head: () => ({
     meta: [
-      { title: 'Save a Card for the Final Balance | Summitaa Roofing' },
+      { title: `Save a Card for the Final Balance | ${siteConfig.name}` },
       {
         name: 'description',
         content:
@@ -66,6 +68,14 @@ type PageResult =
   | { kind: 'pending'; setupIntentId: string; status: string }
   | { kind: 'failed'; setupIntentId: string; status: string }
 
+// The return URL is derived from `window.location.origin`, which does not
+// exist during SSR. Starting in a pending state and resolving it in an effect
+// keeps the server HTML and the first client render identical.
+type ReturnUrlState =
+  | { status: 'pending' }
+  | { status: 'ready'; url: string }
+  | { status: 'invalid' }
+
 function readErrorCode(error: unknown): string | null {
   if (typeof error !== 'object' || error === null) return null
   const code = (error as Record<string, unknown>).code
@@ -78,6 +88,14 @@ function SaveCardPage() {
   const [sdkError, setSdkError] = useState<string | null>(null)
   const [verification, setVerification] = useState<Verification | null>(null)
   const [verifyError, setVerifyError] = useState(false)
+  const [returnUrlState, setReturnUrlState] = useState<ReturnUrlState>({ status: 'pending' })
+  const [customerEmail, setCustomerEmail] = useState('')
+
+  useEffect(() => {
+    // Prefill only what this browser tab already collected. The value is read
+    // after mount so server HTML and the first client render stay identical.
+    setCustomerEmail(readCustomerSession().email)
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -130,11 +148,10 @@ function SaveCardPage() {
     }
   }, [setup])
 
-  const returnUrl = useMemo(
-    () =>
-      typeof window === 'undefined' ? null : buildSaveCardReturnUrl(window.location.origin),
-    [],
-  )
+  useEffect(() => {
+    const url = buildSaveCardReturnUrl(window.location.origin)
+    setReturnUrlState(url ? { status: 'ready', url } : { status: 'invalid' })
+  }, [])
 
   return (
     <>
@@ -205,7 +222,7 @@ function SaveCardPage() {
                 </div>
               </aside>
 
-              <div className="relative border border-ink/12 bg-cream p-5 shadow-[0_30px_70px_-54px_rgba(8,23,32,0.55)] sm:p-7">
+              <div className="relative border border-ink/12 bg-cream p-5 shadow-card sm:p-7">
                 <span className="absolute inset-x-0 top-0 h-0.5 bg-copper" aria-hidden="true" />
                 <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line pb-5">
                   <div>
@@ -219,7 +236,9 @@ function SaveCardPage() {
                   <SampleTag>Whop Elements</SampleTag>
                 </div>
 
-                {!returnUrl ? (
+                {returnUrlState.status === 'pending' ? (
+                  <LoadingBlock />
+                ) : returnUrlState.status === 'invalid' ? (
                   <div className="mt-5 border border-error/30 bg-[#fbf0ec] p-4" role="alert">
                     <p className="text-[12px] font-bold text-error">
                       Card saving cannot start from this address.
@@ -232,27 +251,34 @@ function SaveCardPage() {
                 ) : !elements ? (
                   <LoadingBlock />
                 ) : (
-                  <WhopElements
-                    elements={elements}
-                    onLoadError={() =>
-                      setSdkError('The secure card library could not be loaded.')
-                    }
+                  <PaymentErrorBoundary
+                    title="The secure card form could not be displayed."
+                    description="No card was saved and nothing was charged. Reload the page to try again, and contact the office if it keeps happening."
                   >
-                    <Payments
-                      accountId={whopPublicConfig.accountId}
-                      mode="setup"
-                      currency="usd"
-                      setupFutureUsage="off_session"
-                      returnUrl={returnUrl}
-                      fallback={<LoadingBlock />}
+                    <WhopElements
+                      elements={elements}
+                      environment={whopPublicConfig.environment}
+                      onLoadError={() =>
+                        setSdkError('The secure card library could not be loaded.')
+                      }
                     >
-                      <SaveCardForm
-                        returnUrl={returnUrl}
-                        verification={verification}
-                        verifyError={verifyError}
-                      />
-                    </Payments>
-                  </WhopElements>
+                      <Payments
+                        accountId={whopPublicConfig.accountId}
+                        mode="setup"
+                        currency="usd"
+                        setupFutureUsage="off_session"
+                        returnUrl={returnUrlState.url}
+                        fallback={<LoadingBlock />}
+                      >
+                        <SaveCardForm
+                          returnUrl={returnUrlState.url}
+                          verification={verification}
+                          verifyError={verifyError}
+                          customerEmail={customerEmail}
+                        />
+                      </Payments>
+                    </WhopElements>
+                  </PaymentErrorBoundary>
                 )}
               </div>
             </div>
@@ -278,10 +304,12 @@ function SaveCardForm({
   returnUrl,
   verification,
   verifyError,
+  customerEmail,
 }: {
   returnUrl: string
   verification: Verification | null
   verifyError: boolean
+  customerEmail: string
 }) {
   const payments = usePayments()
   const whop = useWhop()
@@ -457,8 +485,11 @@ function SaveCardForm({
       ) : (
         <>
           <div className="space-y-4">
-            <EmailElement />
-            <PaymentElement onChange={(event) => setReady(event.complete)} />
+            <EmailElement defaultValue={customerEmail} />
+            <PaymentElement
+              onChange={(event) => setReady(event.complete)}
+              onError={(event) => setError(event.message)}
+            />
             <BrandingElement />
           </div>
 

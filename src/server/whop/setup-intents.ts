@@ -1,6 +1,6 @@
 import '@tanstack/react-start/server-only'
 
-import { whopPublicConfig } from '../../config/whop'
+import { whopPublicConfig } from '@/config'
 import { isSetupIntentId, normalizeSetupIntentStatus } from '../../lib/save-card'
 import { asRecord, pickString, whopRequest } from './client'
 import { getWhopServerConfig } from './config'
@@ -134,5 +134,56 @@ export async function getSetupIntentStatus(setupIntentId: string): Promise<Setup
     paymentMethodId: created.paymentMethodId,
     accountId: created.accountId,
     memberId: created.memberId,
+  }
+}
+
+/**
+ * Finds a saved payment method for a project by listing setup intents and
+ * filtering by project_ref metadata.
+ *
+ * Note: Whop's API does not support filtering setup intents by metadata.
+ * This function lists all setup intents for the account and filters locally.
+ * For production use with many setup intents, consider storing the mapping
+ * in a database when the card is saved.
+ */
+export async function findSavedPaymentMethodForProject(
+  projectRef: string,
+): Promise<{ setupIntentId: string; paymentMethodId: string } | null> {
+  const config = getWhopServerConfig()
+  if (!config.apiConfigured) return null
+
+  try {
+    // List setup intents for the account
+    const payload = await whopRequest('/setup_intents', {
+      apiVersion: SETUP_INTENTS_API_VERSION,
+      timeoutMs: 15_000,
+    })
+
+    const record = asRecord(payload)
+    const data = record.data
+    if (!Array.isArray(data)) return null
+
+    for (const item of data) {
+      const itemRecord = asRecord(item)
+      const metadata = asRecord(itemRecord.metadata)
+      const itemProjectRef = pickString(metadata, 'project_ref')
+      const paymentMethodId = pickString(itemRecord, 'payment_method_id')
+      const status = pickString(itemRecord, 'status')
+      const id = pickString(itemRecord, 'id')
+
+      if (
+        itemProjectRef === projectRef &&
+        paymentMethodId &&
+        status === 'succeeded' &&
+        id &&
+        isSetupIntentId(id)
+      ) {
+        return { setupIntentId: id, paymentMethodId }
+      }
+    }
+
+    return null
+  } catch {
+    return null
   }
 }
